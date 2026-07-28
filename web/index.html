@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>San Lorenzo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  /* El lienzo 3D va a 480x270 de verdad y lo estira el navegador con vecino mas
+     proximo. Es el equivalente exacto de stretch/mode=viewport + escalado
+     entero de Godot, y sin el se pierde el grano de pixel del original. */
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+           image-rendering: pixelated; display: block; }
+  #hud { pointer-events: none; }
+  /* Portada. Se entra por ella, no de golpe a una calle sin raton capturado. */
+  #portada { position: absolute; inset: 0; z-index: 9; display: grid;
+             place-items: center; text-align: center; cursor: pointer;
+             color: #d8c9a0; font: 13px/1.9 ui-monospace, monospace;
+             background: radial-gradient(ellipse at 50% 60%,
+                         rgba(0,0,0,.35) 0%, rgba(0,0,0,.86) 70%);
+             transition: opacity .6s ease; }
+  #portada.fuera { opacity: 0; pointer-events: none; }
+  #portada h1 { margin: 0 0 .2em; font-size: 42px; letter-spacing: .34em;
+                font-weight: 400; color: #f0dfae; text-indent: .34em;
+                text-shadow: 0 0 24px rgba(255,190,90,.45); }
+  #portada .sub { color: #9a8c6b; letter-spacing: .22em; font-size: 11px;
+                  margin-bottom: 2.4em; text-transform: uppercase; }
+  #portada .teclas { color: #8a7d60; font-size: 12px; }
+  #portada .teclas b { color: #c9b98d; font-weight: 400; }
+  #portada .entrar { margin-top: 2.4em; color: #ffd98a; font-size: 13px;
+                     animation: latido 2.4s ease-in-out infinite; }
+  @keyframes latido { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="vista"></canvas>
+<canvas id="hud"></canvas>
+<div id="portada">
+  <div>
+    <h1>SAN LORENZO</h1>
+    <div class="sub">El Escorial &middot; anno Domini MDLXX</div>
+    <div class="teclas">
+      <b>WASD</b> andar &nbsp;·&nbsp; <b>Mayus</b> correr &nbsp;·&nbsp; <b>raton</b> mirar<br>
+      <b>E</b> hablar &nbsp;·&nbsp; <b>Q</b> preguntar el camino<br>
+      <b>[ ]</b> mover el sol &nbsp;·&nbsp; <b>P</b> parar el reloj<br>
+      <b>V</b> vuelo libre &nbsp;·&nbsp; <b>Esc</b> soltar el raton
+    </div>
+    <div class="entrar" id="estado">levantando el pueblo…</div>
+  </div>
+</div>
+<script>
+  // Sin esto un fallo dentro del modulo deja la pantalla en "cargando" y sin
+  // rastro en consola, que es exactamente como no se depura nada.
+  const fallo = (m) => {
+    const a = document.getElementById('estado');
+    if (a) a.innerHTML = '<b>fallo al arrancar</b><br>' + m;
+    console.error('arranque:', m);
+  };
+  addEventListener('error', (e) => fallo(e.message + '\n' + (e.filename || '')));
+  addEventListener('unhandledrejection', (e) => fallo(e.reason && (e.reason.stack || e.reason)));
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

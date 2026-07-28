@@ -1,0 +1,11 @@
+# data/build/ SI va al repositorio: world.json y terrain.bin son lo unico que el
+# juego descarga en ejecucion y sin ellos un clon no arranca. De ahi la barra
+# inicial: sin ella el patron tapaba tambien data/build/ y el repo salia roto.
+/build/
+
+# Entradas del pipeline: 8 MB que tools/fetch.sh vuelve a descargar solo.
+data/raw/
+
+__pycache__/
+*.part
+.DS_Store
