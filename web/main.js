@@ -157,6 +157,7 @@ window.__step = (n = 1) => { for (let i = 0; i < n; i++) paso(1 / 60); return wi
 //   A) andar en cuatro rumbos recorre lo que debe y nunca se hunde en el terreno
 //   B) una fachada frena de verdad
 //   C) ningun tejado ni chimenea se queda colgado sobre el vacio
+//   D) el salto sube lo que debe y devuelve al suelo
 // El muro de (B) se localiza a partir de los datos, no del punto de aparicion.
 if (q.has('test')) {
   const lineas = [];
@@ -215,6 +216,17 @@ if (q.has('test')) {
   }
   player.keys.delete('KeyW');
 
+  // D) El salto: un toque de espacio sube ~0.81 m (v^2/2g con 5.4 y 18) y
+  // devuelve al jugador al suelo antes de un segundo.
+  player.spawn(SPAWN.x, SPAWN.z, SPAWN.yaw);
+  const suelo0 = player.pos.y;
+  player.keys.add('Space');
+  paso(1 / 60);
+  player.keys.delete('Space');
+  let vuelo = 0;
+  for (let i = 0; i < 60; i++) { paso(1 / 60); vuelo = Math.max(vuelo, player.pos.y - suelo0); }
+  const posado = Math.abs(player.pos.y - suelo0) < 0.01;
+
   // C) Cada vertice de la malla de cubiertas tiene que caer sobre alguna huella,
   // o como mucho a un alero de ella. Es la comprobacion del faldon flotante: si
   // gableRoof vuelve a tirar el tejado sobre el rectangulo envolvente en vez de
@@ -236,13 +248,15 @@ if (q.has('test')) {
 
   // 0.50 discrimina: con el tejado sobre el rectangulo envolvente esto daba
   // 3.13% (el peor vertice a 25 m de cualquier fachada), y ahora da 0.02%.
-  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.5;
+  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.5
+    && vuelo > 0.6 && vuelo < 1.2 && posado;
   const informe = [...lineas,
     `hundimiento maximo bajo el terreno: ${hundimiento.toFixed(2)} m (limite 0.50)`,
     `contra ${muestra.length} fachadas desde 3.0 m: se cuelan ${coladas}`
     + ` (avance maximo ${avance.toFixed(2)} m de 13.6 m libres, limite 4.0)`,
     `cubierta colgada sobre el vacio: ${pctColgados.toFixed(2)}% de los vertices a mas`
     + ` de 2.5 m de una fachada, el peor a ${peor.toFixed(1)} m (limite 0.50%)`,
+    `salto: sube ${vuelo.toFixed(2)} m (limites 0.60-1.20) y ${posado ? 'vuelve al suelo' : 'NO vuelve al suelo'}`,
     `RESULTADO: ${ok ? 'OK' : 'FALLO'}`].join('\n');
   console.log(informe);
   window.__test = { ok, informe };
