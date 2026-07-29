@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { World } from './world.js';
+import { World, vuela } from './world.js';
 import { DayNight } from './daynight.js';
 import { Player } from './player.js';
 import { Minimap } from './minimap.js';
@@ -153,9 +153,10 @@ function paso(dt) {
 // requestAnimationFrame no dispara.
 window.__step = (n = 1) => { for (let i = 0; i < n; i++) paso(1 / 60); return window.__frames; };
 
-// ?test: comprobacion ejecutable del jugador.
+// ?test: comprobacion ejecutable del jugador y de las cubiertas.
 //   A) andar en cuatro rumbos recorre lo que debe y nunca se hunde en el terreno
 //   B) una fachada frena de verdad
+//   C) ningun tejado ni chimenea se queda colgado sobre el vacio
 // El muro de (B) se localiza a partir de los datos, no del punto de aparicion.
 if (q.has('test')) {
   const lineas = [];
@@ -177,8 +178,10 @@ if (q.has('test')) {
       player.pos.z - ini.z).toFixed(1)} m recorridos`);
   }
 
-  // fachada mas larga del pueblo, con la normal saliente
-  let mejor = 0, pos = [0, 0], nor = [1, 0];
+  // Las fachadas mas largas del pueblo, con su normal saliente. Se prueban
+  // muchas y no solo la mayor: una sola fachada no distingue "las paredes
+  // frenan" de "esa pared frena".
+  const fachadas = [];
   for (const b of world.data.buildings) {
     const flat = b.p, n = flat.length / 2;
     if (n < 3) continue;
@@ -192,25 +195,54 @@ if (q.has('test')) {
       let p = [flat[i * 2], flat[i * 2 + 1]], r = [flat[j * 2], flat[j * 2 + 1]];
       if (area > 0) [p, r] = [r, p];              // mismo criterio de giro que los muros
       const l = Math.hypot(r[0] - p[0], r[1] - p[1]);
-      if (l > mejor) {
-        mejor = l;
-        const e = [(r[0] - p[0]) / l, (r[1] - p[1]) / l];
-        nor = [-e[1], e[0]];
-        pos = [(p[0] + r[0]) * 0.5 + nor[0] * 3, (p[1] + r[1]) * 0.5 + nor[1] * 3];
-      }
+      if (l < 8) continue;
+      const e = [(r[0] - p[0]) / l, (r[1] - p[1]) / l];
+      const nor = [-e[1], e[0]];
+      fachadas.push({ l, nor, pos: [(p[0] + r[0]) * 0.5 + nor[0] * 3, (p[1] + r[1]) * 0.5 + nor[1] * 3] });
     }
   }
-  // adelante = (-sin y, -cos y); para mirar a -normal hace falta atan2(nx, nz)
-  player.spawn(pos[0], pos[1], Math.atan2(nor[0], nor[1]));
-  const iniMuro = player.pos.clone();
-  andar(4);
+  fachadas.sort((a, b) => b.l - a.l);
+  const muestra = fachadas.slice(0, 120);
+  let avance = 0, coladas = 0;
+  for (const f of muestra) {
+    // adelante = (-sin y, -cos y); para mirar a -normal hace falta atan2(nx, nz)
+    player.spawn(f.pos[0], f.pos[1], Math.atan2(f.nor[0], f.nor[1]));
+    const iniMuro = player.pos.clone();
+    andar(4);
+    const d = Math.hypot(player.pos.x - iniMuro.x, player.pos.z - iniMuro.z);
+    avance = Math.max(avance, d);
+    if (d > 4.0) coladas++;
+  }
   player.keys.delete('KeyW');
-  const avance = Math.hypot(player.pos.x - iniMuro.x, player.pos.z - iniMuro.z);
 
-  const ok = hundimiento < 0.5 && avance < 4.0;
+  // C) Cada vertice de la malla de cubiertas tiene que caer sobre alguna huella,
+  // o como mucho a un alero de ella. Es la comprobacion del faldon flotante: si
+  // gableRoof vuelve a tirar el tejado sobre el rectangulo envolvente en vez de
+  // sobre la planta, este contador se dispara.
+  const vc = world.getObjectByName('Cubiertas').geometry.getAttribute('position');
+  let colgados = 0, peor = 0;
+  for (let i = 0; i < vc.count; i++) {
+    const x = vc.getX(i), z = vc.getZ(i);
+    let d = Infinity;
+    for (const flat of player.cerca(x, z)) {
+      const p = [];
+      for (let j = 0; j < flat.length; j += 2) p.push([flat[j], flat[j + 1]]);
+      d = Math.min(d, vuela(p, x, z));
+      if (d === 0) break;
+    }
+    if (d > 2.5) { colgados++; peor = Math.max(peor, d === Infinity ? 0 : d); }
+  }
+  const pctColgados = 100 * colgados / vc.count;
+
+  // 0.50 discrimina: con el tejado sobre el rectangulo envolvente esto daba
+  // 3.13% (el peor vertice a 25 m de cualquier fachada), y ahora da 0.02%.
+  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.5;
   const informe = [...lineas,
     `hundimiento maximo bajo el terreno: ${hundimiento.toFixed(2)} m (limite 0.50)`,
-    `contra fachada desde 3.0 m: avanza ${avance.toFixed(2)} m de 13.6 m libres (limite 4.0)`,
+    `contra ${muestra.length} fachadas desde 3.0 m: se cuelan ${coladas}`
+    + ` (avance maximo ${avance.toFixed(2)} m de 13.6 m libres, limite 4.0)`,
+    `cubierta colgada sobre el vacio: ${pctColgados.toFixed(2)}% de los vertices a mas`
+    + ` de 2.5 m de una fachada, el peor a ${peor.toFixed(1)} m (limite 0.50%)`,
     `RESULTADO: ${ok ? 'OK' : 'FALLO'}`].join('\n');
   console.log(informe);
   window.__test = { ok, informe };

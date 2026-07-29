@@ -68,16 +68,22 @@ export class Player {
     this.sync();
   }
 
-  // Cierto si un cilindro de radio RADIUS en (x, z) toca alguna fachada.
-  blocked(x, z) {
+  // Huellas candidatas alrededor de (x, z): las de su celda y las ocho vecinas.
+  cerca(x, z) {
     const cx = (x / OCC_CELL) | 0, cy = (z / OCC_CELL) | 0;
+    const out = [];
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const l = this.grid.get((cx + dx) * 100000 + (cy + dy));
-        if (!l) continue;
-        for (const poly of l) if (hits(poly, x, z, RADIUS)) return true;
+        if (l) out.push(...l);
       }
     }
+    return out;
+  }
+
+  // Cierto si un cilindro de radio RADIUS en (x, z) toca alguna fachada.
+  blocked(x, z) {
+    for (const poly of this.cerca(x, z)) if (hits(poly, x, z, RADIUS)) return true;
     return false;
   }
 

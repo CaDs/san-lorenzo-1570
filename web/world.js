@@ -280,7 +280,10 @@ const WALL_FRAG = `
 `;
 
 function wallMaterial() {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  // Las fachadas son un plano sin grosor ni cara interior: con FrontSide se
+  // esfuman en cuanto se las mira desde dentro. three.js ya invierte la normal
+  // en la cara trasera, asi que el interior sale oscuro, que es lo que se busca.
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
   mat.userData.glow = { value: 2.6 };
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.glow = mat.userData.glow;
@@ -401,7 +404,7 @@ function terrainMaterial(roca = 1.0) {
 // ya existente (la proporcion es invariante al *= de brillo que aplican
 // gableRoof/slateRoof, asi que sirve de "textura" barata sin atributo nuevo).
 function roofMaterial() {
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = 'varying vec3 vRPos;\nvarying vec3 vRNorm;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
@@ -1138,7 +1141,7 @@ export class World extends THREE.Group {
     }
 
     // La parrilla: crujias con cubierta de pizarra dejando patios entre medias.
-    this.monasteryWings(u, v, umin, umax, vmin, vmax, top, uv, wall, roof);
+    this.monasteryWings(poly, u, v, umin, umax, vmin, vmax, top, uv, wall, roof);
 
     // Cimborrio: tambor octogonal + cupula, corrido en el eje largo como el real.
     const dc = [c[0] + u[0] * 10, c[1] + u[1] * 10];
@@ -1172,7 +1175,7 @@ export class World extends THREE.Group {
   // MON_GRID_V patios; lo que queda entre ellos son bandas, y cada banda lleva
   // muro con ventanas y cubierta a dos aguas. Las bandas se cruzan y se solapan
   // en los encuentros: por dentro no se ve, y evita tener que unir poligonos.
-  monasteryWings(u, v, umin, umax, vmin, vmax, top, uv, wall, roof) {
+  monasteryWings(poly, u, v, umin, umax, vmin, vmax, top, uv, wall, roof) {
     const u0 = umin + MON_INSET, u1 = umax - MON_INSET;
     const v0 = vmin + MON_INSET, v1 = vmax - MON_INSET;
     // Posicion del eje de cada banda: los extremos y los tabiques entre patios.
@@ -1184,15 +1187,38 @@ export class World extends THREE.Group {
     const ev = ejes(v0 + MON_WING_W * 0.5, v1 - MON_WING_W * 0.5, MON_GRID_V);
     const hw = MON_WING_W * 0.5;
 
-    const banda = (su0, su1, sv0, sv1) => {
+    const mundo = (a, b) => [u[0] * a + v[0] * b, u[1] * a + v[1] * b];
+    const emitir = (su0, su1, sv0, sv1) => {
       const rect = [[su0, sv0], [su1, sv0], [su1, sv1], [su0, sv1]]
-        .map(([a, b]) => [u[0] * a + v[0] * b, u[1] * a + v[1] * b]);
+        .map(([a, b]) => mundo(a, b));
       extrudeRing(rect, top - 0.5, top + MON_WING_H, uv, wall);
       slateRoof(rect, top + MON_WING_H, MON_WING_ROOF, roof);
     };
 
-    for (const e of eu) banda(e - hw, e + hw, v0, v1);   // crujias transversales
-    for (const e of ev) banda(u0, u1, e - hw, e + hw);   // crujias longitudinales
+    // La huella real del Monasterio no llena su rectangulo orientado (35.770 m2
+    // de 44.229), asi que una banda tirada de lado a lado se sale por los
+    // chaflanes y queda colgada en el aire fuera de la muralla. Se trocea a lo
+    // largo, se descartan los trozos que pisan fuera y los que quedan se emiten
+    // en tiradas seguidas, para no dejar hastiales enfrentados por dentro.
+    const banda = (su0, su1, sv0, sv1, enU) => {
+      const [a0, a1] = enU ? [su0, su1] : [sv0, sv1];
+      const nT = Math.max(1, Math.round((a1 - a0) / (MON_WING_W * 2)));
+      const paso = (a1 - a0) / nT;
+      const trozo = (i, e0, e1) => (enU
+        ? [a0 + paso * (i + e0), a0 + paso * (i + e1), sv0, sv1]
+        : [su0, su1, a0 + paso * (i + e0), a0 + paso * (i + e1)]);
+      let ini = -1;
+      for (let i = 0; i <= nT; i++) {
+        const t = i < nT ? trozo(i, 0, 1) : null;
+        const dentro = t && [[t[0], t[2]], [t[1], t[2]], [t[1], t[3]], [t[0], t[3]]]
+          .every(([a, b]) => { const p = mundo(a, b); return vuela(poly, p[0], p[1]) === 0; });
+        if (dentro && ini < 0) ini = i;
+        else if (!dentro && ini >= 0) { emitir(...trozo(ini, 0, i - ini)); ini = -1; }
+      }
+    };
+
+    for (const e of eu) banda(e - hw, e + hw, v0, v1, false);   // crujias transversales
+    for (const e of ev) banda(u0, u1, e - hw, e + hw, true);    // crujias longitudinales
   }
 }
 
@@ -1266,11 +1292,45 @@ function extrudeRing(ring, base, top, uv, wall) {
   }
 }
 
-// Piramide de base poligonal, para chapiteles y la cupula.
-function pyramid(ring, y0, y1, col, roof) {
+// Cuanto vuela un punto por fuera de un anillo en planta: 0 si cae dentro, y si
+// no la distancia a la fachada mas cercana. Es el `hits` de player.js con el
+// margen a la salida en vez de a la entrada; alli decide si frena al jugador,
+// aqui si un faldon o una chimenea se quedan colgados sobre el vacio.
+export function vuela(poly, x, z) {
+  let dentro = false, dist = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > z) !== (b[1] > z)
+      && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) dentro = !dentro;
+    const ex = b[0] - a[0], ez = b[1] - a[1], ll = ex * ex + ez * ez;
+    const t = ll > 0 ? Math.min(Math.max(((x - a[0]) * ex + (z - a[1]) * ez) / ll, 0), 1) : 0;
+    dist = Math.min(dist, Math.hypot(a[0] + ex * t - x, a[1] + ez * t - z));
+  }
+  return dentro ? 0 : dist;
+}
+
+// Un punto seguro dentro de un anillo cualquiera: baricentro del triangulo mas
+// grande de su triangulacion. El centroide del anillo no vale, en una planta en
+// L se sale del edificio.
+function safeInterior(poly) {
+  const contour = poly.map((p) => new THREE.Vector2(p[0], p[1]));
+  let best = null, bestA = -1;
+  for (const t of THREE.ShapeUtils.triangulateShape(contour, [])) {
+    const [a, b, c] = t.map((i) => poly[i]);
+    const A = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+    if (A > bestA) { bestA = A; best = [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3]; }
+  }
+  return best;
+}
+
+// Piramide de base poligonal, para chapiteles, la cupula y los tejados a cuatro
+// aguas. `cumbre` fuerza el vertice en planta; sin el se usa el centroide, que
+// en un anillo concavo puede caer fuera.
+function pyramid(ring, y0, y1, col, roof, cumbre) {
   let cx = 0, cz = 0;
   for (const p of ring) { cx += p[0]; cz += p[1]; }
   cx /= ring.length; cz /= ring.length;
+  if (cumbre) { cx = cumbre[0]; cz = cumbre[1]; }
   const apex = [cx, y1, cz];
   const dentro = [cx, y0 - 1, cz];
   for (let i = 0; i < ring.length; i++) {
@@ -1297,8 +1357,14 @@ function tower(c, u, hw, y0, y1, spire, uv, wall, roof) {
 // La cumbrera va paralela a la fachada mas larga, que es como se levanta de
 // verdad. El rectangulo sale de proyectar el contorno sobre esa direccion, asi
 // que siempre lo contiene y lo que sobra queda de alero volado.
-// ponytail: en plantas en L el faldon tapa de mas; a 480x270 y con 3545 casas no
-// compensa un esqueleto recto de verdad.
+//
+// Cuando el rectangulo se pasa de la huella (plantas en L y similares: una de
+// cada cinco casas, y las peores llegan a 3,5x) ese sobrante son metros de
+// faldon sin muro debajo, que se leen como un tejado flotando. En ese caso se
+// cambia a cuatro aguas sobre la huella real, que no puede salirse.
+// ponytail: el abanico de faldones sale del interior seguro, no de un esqueleto
+// recto; en un anillo no estrellado algun pano se pasa un poco. Sobra para 3545
+// casas vistas desde la calle.
 function gableRoof(poly, top, seed, roof, chimneys) {
   const n = poly.length;
   let u = [1, 0], masLarga = -1;
@@ -1314,35 +1380,70 @@ function gableRoof(poly, top, seed, roof, chimneys) {
     umin = Math.min(umin, du); umax = Math.max(umax, du);
     vmin = Math.min(vmin, dv); vmax = Math.max(vmax, dv);
   }
-  umin -= EAVES; umax += EAVES; vmin -= EAVES; vmax += EAVES;
-
-  const alto = Math.min((vmax - vmin) * 0.5 * ROOF_PITCH, ROOF_MAX);
-  const vmid = (vmin + vmax) * 0.5;
-  const pt = (su, sv, y) => [u[0] * su + v[0] * sv, y, u[1] * su + v[1] * sv];
-
-  const a = pt(umin, vmin, top), b = pt(umax, vmin, top);
-  const c = pt(umax, vmax, top), d = pt(umin, vmax, top);
-  const r0 = pt(umin, vmid, top + alto), r1 = pt(umax, vmid, top + alto);
-  const dentro = pt((umin + umax) * 0.5, vmid, top - 1.0);
+  let areaPoly = 0;
+  for (let i = 0; i < n; i++) {
+    const p = poly[i], q = poly[(i + 1) % n];
+    areaPoly += p[0] * q[1] - q[0] * p[1];
+  }
+  areaPoly = Math.abs(areaPoly) * 0.5;
+  const largo = Math.max(umax - umin, vmax - vmin);
+  // Dos avisos de que el rectangulo no representa la planta: que sobre area, y
+  // que alguna de sus esquinas caiga lejos de la fachada. El segundo pilla los
+  // chaflanes, que apenas mueven el area y sin embargo dejan metros de faldon en
+  // el aire. Con los dos, 47% de las casas pasan a cuatro aguas y solo quedan 99
+  // con mas de 2 m de vuelo (eran 1626); solo con el area harian falta el 63%.
+  const esq = [[umin - EAVES, vmin - EAVES], [umax + EAVES, vmin - EAVES],
+    [umax + EAVES, vmax + EAVES], [umin - EAVES, vmax + EAVES]];
+  const aCuatroAguas = (umax - umin) * (vmax - vmin) > 1.25 * areaPoly
+    || esq.some(([su, sv]) => vuela(poly, u[0] * su + v[0] * sv, u[1] * su + v[1] * sv) > 2.0);
 
   let col = seed < 0.45 ? ROOF_THATCH : ROOF_TILE;
   col = mul(col, 0.82 + 0.36 * fract(seed * 7.13));
 
-  roof.tri(a, b, r1, dentro, col);            // faldon 1
-  roof.tri(a, r1, r0, dentro, col);
-  roof.tri(c, d, r0, dentro, col);            // faldon 2
-  roof.tri(c, r0, r1, dentro, col);
-  roof.tri(b, c, r1, dentro, col);            // hastiales
-  roof.tri(d, a, r0, dentro, col);
+  // Punto donde se planta la chimenea, ya en coordenadas de mundo.
+  let cx, cy, cz;
+
+  if (aCuatroAguas) {
+    // Sin alero: el faldon arranca en la linea de fachada. Volarlo pediria
+    // desplazar el anillo hacia fuera, y es justo lo que sobra aqui.
+    const ancho = areaPoly / Math.max(largo, 1e-3);   // anchura media de la planta
+    const alto = Math.min(ancho * 0.5 * ROOF_PITCH, ROOF_MAX);
+    const cumbre = safeInterior(poly);
+    if (!cumbre) return;
+    pyramid(poly, top, top + alto, col, roof, cumbre);
+    [cx, cy, cz] = [cumbre[0], top + alto, cumbre[1]];
+  } else {
+    umin -= EAVES; umax += EAVES; vmin -= EAVES; vmax += EAVES;
+
+    const alto = Math.min((vmax - vmin) * 0.5 * ROOF_PITCH, ROOF_MAX);
+    const vmid = (vmin + vmax) * 0.5;
+    const pt = (su, sv, y) => [u[0] * su + v[0] * sv, y, u[1] * su + v[1] * sv];
+
+    const a = pt(umin, vmin, top), b = pt(umax, vmin, top);
+    const c = pt(umax, vmax, top), d = pt(umin, vmax, top);
+    const r0 = pt(umin, vmid, top + alto), r1 = pt(umax, vmid, top + alto);
+    const dentro = pt((umin + umax) * 0.5, vmid, top - 1.0);
+
+    roof.tri(a, b, r1, dentro, col);            // faldon 1
+    roof.tri(a, r1, r0, dentro, col);
+    roof.tri(c, d, r0, dentro, col);            // faldon 2
+    roof.tri(c, r0, r1, dentro, col);
+    roof.tri(b, c, r1, dentro, col);            // hastiales
+    roof.tri(d, a, r0, dentro, col);
+
+    const ct = 0.25 + fract(seed * 5.0) * 0.5;    // posicion a lo largo de la cumbrera
+    cx = r0[0] + (r1[0] - r0[0]) * ct;
+    cy = r0[1] + (r1[1] - r0[1]) * ct;
+    cz = r0[2] + (r1[2] - r0[2]) * ct;
+    // Aun con el rectangulo ajustado la cumbrera puede cruzar un entrante de la
+    // planta: ahi la chimenea quedaria colgada en el aire.
+    if (vuela(poly, cx, cz) > 0) return;
+  }
 
   // Chimenea: subconjunto determinista (~40% de las casas, por semilla), pila
   // que afina en dos tramos, plantada en la cumbrera. Sin esto el caserio se
   // lee como prismas puros; con una en cuatro tejados ya rompe la silueta.
   if (seed > 0.60) {
-    const ct = 0.25 + fract(seed * 5.0) * 0.5;    // posicion a lo largo de la cumbrera
-    const cx = r0[0] + (r1[0] - r0[0]) * ct;
-    const cy = r0[1] + (r1[1] - r0[1]) * ct;
-    const cz = r0[2] + (r1[2] - r0[2]) * ct;
     const cb = [[u[0], 0, u[1]], [0, 1, 0], [-u[1], 0, u[0]]];
     const chimCol = mul(CHIMNEY_STONE, 0.85 + 0.3 * fract(seed * 11.0));
     boxCol(roof, [cx, cy - 0.25, cz], [0.40, 0.55, 0.40], cb, chimCol);
