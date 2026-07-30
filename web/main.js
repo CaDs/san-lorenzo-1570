@@ -103,6 +103,9 @@ addEventListener('keydown', (e) => {
   if (player.free) return;
   if (e.code === 'KeyE') misiones.interactuar();
   else if (e.code === 'KeyQ') misiones.indicaciones();
+  // X deja la conversacion. No Esc: cuando el raton esta capturado, Escape lo
+  // suelta el navegador y la pagina no llega a ver la pulsacion.
+  else if (e.code === 'KeyX') misiones.saltar();
 });
 
 const composer = new EffectComposer(renderer);

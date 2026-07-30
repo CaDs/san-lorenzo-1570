@@ -116,6 +116,16 @@ leen como ruido en vez de como ventanas.
   alcanzados antes de que te los encarguen; con los 180 m fijos de antes, aparecer
   en la lonja dejaba fuera al Monasterio, que cae a 159 m. `make tramas` prueba 300
   semillas sin navegador.
+- **La conversacion se puede dejar** (`quests.js`): `X` la cierra, y alejarse
+  andando mas de 9 m la corta sola. Antes el bocadillo no tenia salida -solo
+  ofrecia "E seguir"- y seguia abierto pasara lo que pasara: se podia cruzar el
+  pueblo leyendo lo que decia un aguador que habia quedado doscientos metros
+  atras. Las dos formas de salir no son la misma cosa: `X` es "ya lo he leido" y
+  da el paso de la mision por hecho, irse andando es "me voy" y lo deja
+  pendiente. `X` tiene que contar, ademas, porque la narracion de llegar a un
+  sitio se reabre sola mientras sigas dentro del radio, y cancelarla sin avanzar
+  seria un bucle con la tecla sin efecto. No se usa `Esc` para esto: con el raton
+  capturado, el navegador se lo queda para soltarlo y la pagina no llega a verlo.
 - **Conversacion** (`dialogos.js` + `lugares.js`): se puede hablar con los 220,
   no solo con el objetivo de la mision. Cada vecino tiene frases de su oficio,
   saludo segun la hora y rumores; la eleccion es determinista por vecino, asi

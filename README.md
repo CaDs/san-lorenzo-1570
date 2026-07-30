@@ -17,8 +17,9 @@ make dev        # http://localhost:8000/web/
 |---|---|
 | `WASD` | andar · `Mayus` correr · `espacio` saltar |
 | ratón | mirar · `Esc` soltar el puntero |
-| `E` | hablar con quien tengas al lado |
+| `E` | hablar con quien tengas al lado · seguir la conversacion |
 | `Q` | preguntarle el camino |
+| `X` | dejar la conversacion (o alejarse andando, que la corta igual) |
 | `[` `]` | mover el sol · `P` parar el reloj |
 | `V` | vuelo libre, para ver el pueblo desde arriba |
 | | en vuelo: `W` `S` avanzar · `A` ladear · `E` subir · `D` bajar |

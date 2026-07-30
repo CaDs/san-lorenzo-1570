@@ -9,6 +9,7 @@ import { generarEncargos } from './tramas.js';
 // mano de player.pos sin arrastrar la dependencia.
 
 const TALK_RANGE = 4.0;      // metros para que aparezca el aviso "E - hablar"
+const DROP_RANGE = 9.0;      // metros a los que se corta una conversacion andando
 // A 10px monospace un caracter mide 6 px de ancho. Se usa solo como respaldo:
 // lo normal es medirlo, que hay monoespaciadas mas anchas y mas estrechas.
 const CHAR_W = 0.6;
@@ -48,7 +49,13 @@ export class Misiones {
 
   update(dt, player) {
     this.cerca = null;
-    if (this.dialogo) return;   // con el dialogo abierto no hace falta buscar mas
+    // Andarse lejos deja la conversacion. Antes el dialogo seguia abierto pasara
+    // lo que pasara: se podia cruzar el pueblo entero leyendo lo que decia un
+    // aguador que habia quedado a doscientos metros.
+    if (this.dialogo) {
+      this._comprobarDistancia(player);
+      if (this.dialogo) return;   // sigue abierto: no hace falta buscar mas
+    }
 
     // El paso "reach" se resuelve solo, pero eso ya no impide seguir buscando
     // con quien hablar: por el camino al sitio hay gente.
@@ -87,10 +94,36 @@ export class Misiones {
     return !!(q && q.oficio && npc && npc.oficio === q.oficio);
   }
 
-  _abrir(lineas, avanza = false) {
+  // `npc` es con quien se habla, si es con alguien: la ficha de npcs.js trae la
+  // posicion VIVA del vecino, asi que sirve para saber si te has ido -o si se ha
+  // ido el-, sin copiar coordenadas que envejecen.
+  _abrir(lineas, avanza = false, npc = null) {
     if (!lineas || !lineas.length) return;
-    this.dialogo = { lineas, i: 0 };
+    this.dialogo = { lineas, i: 0, npc };
     this.pendienteAvance = avanza;
+  }
+
+  // Se corta la conversacion sin darla por hecha: te has ido a media frase, asi
+  // que el paso de la mision sigue pendiente y se puede volver a hablar.
+  _comprobarDistancia(player) {
+    const npc = this.dialogo.npc;
+    if (!npc || !npc.pos) return;
+    const dx = player.pos.x - npc.pos.x, dz = player.pos.z - npc.pos.z;
+    if (dx * dx + dz * dz > DROP_RANGE * DROP_RANGE) {
+      this.dialogo = null;
+      this.pendienteAvance = false;
+    }
+  }
+
+  // X: dejar la conversacion. Al contrario que irse andando, esto SI la da por
+  // hecha si era la de la mision: es "ya lo he leido, sigamos", no "me voy". Y
+  // ademas hace falta que cuente, porque la narracion de llegar a un sitio se
+  // vuelve a abrir sola mientras sigas dentro del radio: cancelarla sin avanzar
+  // seria un bucle en el que la tecla no hace nada.
+  saltar() {
+    if (!this.dialogo) return;
+    this.dialogo = null;
+    if (this.pendienteAvance) { this.paso++; this.pendienteAvance = false; }
   }
 
   _contar(npc) {
@@ -113,12 +146,12 @@ export class Misiones {
     // Si es justo a quien busca la mision, manda el guion del encargo.
     if (this._esObjetivo(this.cerca)) {
       this._contar(this.cerca);
-      this._abrir(this.actual.dialogo, true);
+      this._abrir(this.actual.dialogo, true, this.cerca);
       return;
     }
     // Si no, charla procedural. Un pueblo de 220 vecinos mudos no es un pueblo.
     this._contar(this.cerca);
-    this._abrir(hablar(this.cerca, this._ctx(this.cerca)));
+    this._abrir(hablar(this.cerca, this._ctx(this.cerca)), false, this.cerca);
   }
 
   // Q: pedir el camino. Funciona con cualquier vecino y, si hay mision viva,
@@ -126,7 +159,7 @@ export class Misiones {
   indicaciones() {
     if (this.dialogo || !this.cerca) return;
     this._contar(this.cerca);
-    this._abrir(indicaciones(this.cerca, this._ctx(this.cerca)));
+    this._abrir(indicaciones(this.cerca, this._ctx(this.cerca)), false, this.cerca);
   }
 
   // Un paso "reach" se resuelve solo, comprobando distancia cada fotograma desde
@@ -227,8 +260,12 @@ export class Misiones {
       ctx.fillText(linea, x0 + 10 * k, y);
       y += 12 * k;
     }
+    // Las dos teclas, a la derecha del marco. Antes solo se anunciaba "E seguir",
+    // asi que no habia forma de saber que se podia dejar a medias.
     ctx.fillStyle = INK_DIM;
-    ctx.fillText('E - seguir', x0 + boxW - 68 * k, y0 + boxH - 6 * k);
+    ctx.textAlign = 'right';
+    ctx.fillText('E seguir  ·  X dejarlo', x0 + boxW - 10 * k, y0 + boxH - 6 * k);
+    ctx.textAlign = 'left';
   }
 }
 
