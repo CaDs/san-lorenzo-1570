@@ -267,17 +267,22 @@ if (q.has('test')) {
     for (const [x, z] of puntos) {
       sondas++;
       const d = fuera(x, z);
-      if (d > 2.5) { colgados++; peor = Math.max(peor, d); }
+      // El peor se guarda SIEMPRE, aunque no llegue al umbral: si solo se mirase
+      // lo que pasa de 2.5 m, la medida se queda en cero -como ahora- y deja de
+      // avisar de lo que empeore por debajo hasta que ya se ve desde la calle.
+      peor = Math.max(peor, d);
+      if (d > 2.5) colgados++;
     }
   }
   const pctColgados = 100 * colgados / sondas;
 
   // Los limites discriminan: medido asi, con la piramide en abanico esto daba
-  // 0.166% y 17.8 m de vuelo en el peor triangulo; ahora da 0.001% y 3.2 m, que
-  // es del orden del alero. El limite del PEOR importa tanto como el porcentaje:
-  // ocho triangulos de 850.000 no mueven el tanto por ciento y sin embargo uno
-  // solo, si vuela 20 m, se ve desde la calle.
-  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.01 && peor < 4.0
+  // 0.166% de sondas colgadas y 17.8 m en el peor triangulo; ahora da 0.000% y
+  // 2.4 m, que es el alero (0.45) mas la holgura que se le permite al rectangulo
+  // de cubierta (1.0), no un tejado en el aire. El limite del PEOR importa tanto
+  // como el porcentaje: ocho triangulos de 836.000 no mueven el tanto por ciento
+  // y sin embargo uno solo, si vuela 20 m, se ve desde la calle.
+  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.01 && peor < 3.0
     && vuelo > 0.6 && vuelo < 1.2 && posado;
   const informe = [...lineas,
     `hundimiento maximo bajo el terreno: ${hundimiento.toFixed(2)} m (limite 0.50)`,
@@ -285,7 +290,7 @@ if (q.has('test')) {
     + ` (avance maximo ${avance.toFixed(2)} m de 13.6 m libres, limite 4.0)`,
     `cubierta colgada sobre el vacio: ${pctColgados.toFixed(3)}% de ${sondas} sondas`
     + ` (baricentro, vertices y puntos medios de cada triangulo) a mas de 2.5 m de`
-    + ` una fachada, la peor a ${peor.toFixed(1)} m (limites 0.01% y 4.0 m)`,
+    + ` una fachada; la peor sonda vuela ${peor.toFixed(1)} m (limites 0.01% y 3.0 m)`,
     `salto: sube ${vuelo.toFixed(2)} m (limites 0.60-1.20) y ${posado ? 'vuelve al suelo' : 'NO vuelve al suelo'}`,
     `RESULTADO: ${ok ? 'OK' : 'FALLO'}`].join('\n');
   console.log(informe);

@@ -1132,8 +1132,14 @@ export class World extends THREE.Group {
 
     // Chapiteles en las cuatro esquinas. La huella real no llega al rectangulo
     // teorico en todas ellas, asi que cada torre se ancla al vertice real mas
-    // cercano a la esquina, metida media torre hacia dentro. Arranca de `base`,
-    // bajo tierra: apoyada en `suelo` flotaria en el lado cuesta abajo.
+    // cercano a la esquina y se mete hacia dentro. Arranca de `base`, bajo tierra:
+    // apoyada en `suelo` flotaria en el lado cuesta abajo.
+    //
+    // Media torre de retranqueo no basta: la torre es un CUADRADO orientado con
+    // el eje largo y las esquinas del Monasterio van achaflanadas, asi que su
+    // esquina exterior seguia asomando 3,2 m por fuera de la muralla, con 36 m de
+    // fachada debajo y el chapitel encima. Se mete hasta que las cuatro esquinas
+    // de la base pisan la huella, comprobandolo, en vez de fiarse de una cuenta.
     const hw = MON_TOWER_W * 0.5;
     for (const su of [umin, umax]) {
       for (const sv of [vmin, vmax]) {
@@ -1144,7 +1150,16 @@ export class World extends THREE.Group {
           if (d < dmin) { dmin = d; pv = p; }
         }
         const dc = Math.hypot(c[0] - pv[0], c[1] - pv[1]) || 1;
-        tower([pv[0] + (c[0] - pv[0]) / dc * hw, pv[1] + (c[1] - pv[1]) / dc * hw],
+        const hacia = [(c[0] - pv[0]) / dc, (c[1] - pv[1]) / dc];
+        const base4 = (t) => [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) =>
+          [pv[0] + hacia[0] * t + (u[0] * a + v[0] * b) * hw,
+            pv[1] + hacia[1] * t + (u[1] * a + v[1] * b) * hw]);
+        let met = hw;
+        for (let k = 0; k < 24; k++) {
+          if (base4(met).every(([x, z]) => vuela(poly, x, z) === 0)) break;
+          met += 0.5;                 // hasta 12 m mas adentro, medio metro cada vez
+        }
+        tower([pv[0] + hacia[0] * met, pv[1] + hacia[1] * met],
           u, hw, base, suelo + MON_TOWER_H, MON_SPIRE_H, uv, wall, roof);
       }
     }

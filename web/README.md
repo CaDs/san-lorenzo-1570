@@ -65,6 +65,13 @@ Muralla perimetral sobre su huella real de OSM, y ademas:
   huecos no se sortean como en el caserio, van todos, alineados, con recerco de
   granito claro y menos lumbre encendida dentro. `ainfo` paso de vec2 a vec3 para
   llevar la bandera.
+- **Torres de esquina metidas a medida.** Media torre de retranqueo no bastaba:
+  la torre es un cuadrado orientado con el eje largo y las esquinas del Monasterio
+  van achaflanadas, asi que la esquina exterior asomaba 3,2 m por fuera de la
+  muralla, con 36 m de fachada debajo. Ahora se mete de medio en medio metro hasta
+  que las cuatro esquinas de su base pisan la huella. Las crujias ya se recortaban
+  bien: de los 94 triangulos de pizarra del Monasterio, los 14 que se salian eran
+  todos de las torres.
 - **Linternilla** sobre la cupula del cimborrio.
 - Chapiteles, cimborrio y torres de campanas dimensionados para que la silueta
   mande sobre la masa de las crujias, que llegan a 28 m.
@@ -93,7 +100,9 @@ leen como ruido en vez de como ventanas.
   en L, que es donde salian los tejados flotando. La piramide en abanico que se
   usaba antes para las cuatro aguas se sale sola en cuanto la planta es concava:
   sus TRIANGULOS cruzan el patio aunque todos sus vertices esten en la huella.
-  Medido en vuelo del peor triangulo: 17,8 m antes, 3,2 m ahora (`?test`).
+  Medido en vuelo de la peor sonda: 17,8 m antes, 2,4 m ahora -el alero (0,45) mas
+  la holgura que se le permite al rectangulo (1,0)-, y ni una sonda pasa de 2,5 m
+  (`?test`).
 - **Encargos** (`tramas.js` + `quests.js`): procedurales. Un encargo es una
   FORMA (cuatro arcos de tres o cuatro pasos: quien te manda, a donde vas, quien
   recibe el recado) mas un TEMA (ocho: los lobos de la dehesa, el agua de la
