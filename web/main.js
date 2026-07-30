@@ -30,8 +30,18 @@ function calcularResolucion() {
 
 let { w: W, h: H } = calcularResolucion();
 
-// Punto de aparicion, en el casco viejo. Fijo, para poder comparar capturas.
-const SPAWN = { x: 1343, z: 802, yaw: 2.1946 };
+// Punto de aparicion: la lonja del Monasterio, mirando en diagonal a la fachada
+// de poniente. Fijo, para poder comparar capturas.
+//
+// La lonja no viene nombrada en OSM, asi que el punto sale de la geometria: el
+// lado de poniente de la huella esta en x=1255, la explanada esta a nivel (1026 m,
+// pendiente 0%) y libre de edificios, que es lo que hace que sea una lonja. De
+// frente y a 24 m la fachada es un muro de granito que llena el encuadre; desde
+// este rincon del sur se lee entera, en perspectiva, con la torre de la esquina,
+// los chapiteles y el pueblo subiendo la ladera detras.
+//
+// Antes se aparecia en el casco viejo, de espaldas a la razon de ser del pueblo.
+const SPAWN = { x: 1215, z: 1390, yaw: -Math.PI / 4 };
 
 // Godot: tonemap ACES con blanco 4.0, glow intensidad 0.9 / fuerza 0.85 /
 // umbral 1.0. ponytail: estos cuatro son el mando del revelado.

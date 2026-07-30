@@ -8,6 +8,7 @@ Cache-Control: no-store en todo.
 
 Uso: python3 tools/serve.py [puerto]
 """
+import errno
 import sys
 from functools import partial
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -32,5 +33,20 @@ class SinCache(SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     puerto = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    # Primero se abre el puerto y DESPUES se anuncia la direccion. Al contrario,
+    # con un servidor de otra sesion todavia escuchando en el 8000, `make dev`
+    # imprimia la URL, se caia con "Address already in use" y devolvia el prompt:
+    # parecia que no hacia nada, y la pestana del navegador seguia servida por el
+    # servidor viejo, asi que tampoco se notaba ahi.
+    try:
+        httpd = HTTPServer(('', puerto), partial(SinCache))
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        print(f'el puerto {puerto} ya esta ocupado, seguramente por otro '
+              f'`make dev`.\nquien lo tiene:  lsof -nP -iTCP:{puerto} -sTCP:LISTEN'
+              f'\nsoltarlo:        kill $(lsof -t -iTCP:{puerto} -sTCP:LISTEN)'
+              f'\no servir en otro: make dev PORT={puerto + 1}', file=sys.stderr)
+        sys.exit(1)
     print(f'http://localhost:{puerto}/web/')
-    HTTPServer(('', puerto), partial(SinCache)).serve_forever()
+    httpd.serve_forever()

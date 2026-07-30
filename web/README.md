@@ -46,7 +46,7 @@ redimensionar; el minimapa y el HUD escalan con el mismo factor entero.
 | | |
 |---|---|
 | `?hour=21.5` | congela el reloj a esa hora, para comparar capturas |
-| `?x=&z=&yaw=` | punto de aparicion |
+| `?x=&z=&yaw=` | punto de aparicion; por defecto la lonja del Monasterio |
 | `?test` | comprobacion ejecutable del jugador; el veredicto va a la consola |
 
 `window.__step(n)` avanza n fotogramas con paso fijo y dibuja: en una pestana
@@ -111,9 +111,11 @@ leen como ruido en vez de como ventanas.
   epoca de OSM. Se generan tres seguidos al arrancar, a partir de una semilla que
   se ve en la portada: `?seed=1234` devuelve los mismos, que es lo unico que hace
   depurable un generador. Los destinos se filtran por nombre -OSM nombra el
-  pueblo de hoy, y un vecino de 1570 no manda a nadie al Ahorramas- y salen a mas
-  de 180 m del punto de aparicion, o se darian por alcanzados antes de que te los
-  encarguen. `make tramas` prueba 300 semillas sin navegador.
+  pueblo de hoy, y un vecino de 1570 no manda a nadie al Ahorramas- y se exige que
+  esten a mas del punto de aparicion que su propio radio de llegada, o se darian por
+  alcanzados antes de que te los encarguen; con los 180 m fijos de antes, aparecer
+  en la lonja dejaba fuera al Monasterio, que cae a 159 m. `make tramas` prueba 300
+  semillas sin navegador.
 - **Conversacion** (`dialogos.js` + `lugares.js`): se puede hablar con los 220,
   no solo con el objetivo de la mision. Cada vecino tiene frases de su oficio,
   saludo segun la hora y rumores; la eleccion es determinista por vecino, asi

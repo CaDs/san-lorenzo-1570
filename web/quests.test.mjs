@@ -40,7 +40,10 @@ for (let semilla = 1; semilla <= 300; semilla++) {
     }
     if (p.reach) {
       assert.ok(p.radio >= 25 && p.radio <= 90, `${donde}: radio ${p.radio}`);
-      assert.ok(distancia(origen, p.reach) >= 180, `${donde}: destino pegado`);
+      // Lejos de donde aparece el jugador, contando su radio de llegada: si no,
+      // el paso se cerraria solo antes de que se lo encarguen.
+      assert.ok(distancia(origen, p.reach) >= p.radio + 60, `${donde}: destino pegado`);
+      assert.ok(distancia(origen, p.reach) >= 120, `${donde}: destino a un paso`);
     }
     // Dos pasos seguidos que resuelva el mismo vecino: el segundo se cerraria
     // solo, sin moverse del sitio.

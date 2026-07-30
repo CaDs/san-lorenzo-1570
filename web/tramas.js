@@ -28,8 +28,9 @@ const OFICIOS = ['aguador', 'herrero', 'fraile', 'pastora', 'panadera',
 
 const FEMENINO = new Set(['pastora', 'panadera', 'tejedora']);
 
-const MIN_ORIGEN = 180;   // m: un sitio mas cerca que esto se "alcanza" al nacer
+const MIN_ORIGEN = 120;   // m: menos que esto no es un viaje
 const MIN_ENTRE = 150;    // m entre dos destinos del mismo encargo, o no se anda
+const MARGEN = 60;        // m que hay que andar de mas para no nacer ya llegando
 
 // --- formas ------------------------------------------------------------------
 //
@@ -311,7 +312,7 @@ function unEncargo(s, lugares, vida, origen) {
           // El radio sale de la huella: el Monasterio son 35.771 m2 y su centro
           // cae dentro de los muros, asi que "llegar" es acercarse; una ermita
           // con 90 m de radio se daria por alcanzada desde la calle de al lado.
-          radio: Math.min(90, Math.max(25, Math.sqrt(sitio.area || 400))),
+          radio: radioDe(sitio),
           objetivo: `Acercate a ${sitio.nombre}.`,
           dialogo: [['', rellena(tema.llegada, sitio)],
             ['', rellena(elige(LLEGADA, dado), sitio)]],
@@ -340,9 +341,21 @@ function oficioVivo(preferido, vida, origen, dado, distintoDe) {
   return null;
 }
 
+// Radio para dar por alcanzado un sitio, sacado de su huella: el Monasterio son
+// 35.771 m2 y su centro cae dentro de los muros, asi que "llegar" es acercarse;
+// una ermita con 90 m de radio se daria por alcanzada desde la calle de al lado.
+function radioDe(sitio) {
+  return Math.min(90, Math.max(25, Math.sqrt(sitio.area || 400)));
+}
+
 // `n` sitios con nombre, lejos del punto de partida y lejos entre si: un destino
 // a treinta pasos no es un viaje, y uno pegado al jugador se daria por alcanzado
 // en el primer fotograma, antes de que le hayan encargado nada.
+//
+// La distancia minima al punto de partida se mide contra el RADIO de cada sitio,
+// no con un numero fijo: con 180 m para todos, aparecer en la lonja dejaba fuera
+// al Monasterio -a 159 m, y con 90 m de radio- que es justo el sitio al que uno
+// manda a un caminante en este pueblo.
 function sitiosLejanos(lugares, dado, origen, n) {
   const todos = (lugares && lugares.antiguos) || [];
   if (!todos.length) return [];
@@ -354,7 +367,7 @@ function sitiosLejanos(lugares, dado, origen, n) {
       const s = todos[dado(todos.length)];
       if (out.includes(s)) continue;
       if (exigir) {
-        if (distancia(origen, s) < MIN_ORIGEN) continue;
+        if (distancia(origen, s) < Math.max(MIN_ORIGEN, radioDe(s) + MARGEN)) continue;
         if (out.some((o) => distancia(o, s) < MIN_ENTRE)) continue;
       }
       out.push(s);
