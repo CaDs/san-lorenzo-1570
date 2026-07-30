@@ -22,6 +22,8 @@ const STOREY_DIV = 3.2;
 const ROOF_PITCH = 0.92;
 const ROOF_MAX = 4.6;
 const EAVES = 0.45;
+const PASO_SONDA = 2.0;         // m entre sondas al medir el vuelo de un faldon
+const VUELO_MAX = 1.0;          // m de faldon sobre el vacio que se toleran
 
 const MON_WALL_H = 15.0;
 const MON_TOWER_W = 12.0;
@@ -699,6 +701,13 @@ export class World extends THREE.Group {
       }
       if (area2 > 0) poly.reverse();
 
+      // OSM repite vertices. Una arista de longitud cero no tiene normal, y eso
+      // deja sin bisectriz al anillo metido de la cubierta.
+      for (let i = poly.length - 1; i >= 0 && poly.length > 3; i--) {
+        const q = poly[(i + 1) % poly.length];
+        if (Math.hypot(poly[i][0] - q[0], poly[i][1] - q[1]) < 1e-6) poly.splice(i, 1);
+      }
+
       // Semilla estable por casa: decide material, huecos y tipo de cubierta.
       let seed = fract(Math.sin(flat[0] * 0.7321 + flat[1] * 1.3177) * 43758.5453);
       // Una nave de 600 m2 no se levanta con entramado de madera.
@@ -1323,8 +1332,131 @@ function safeInterior(poly) {
   return best;
 }
 
-// Piramide de base poligonal, para chapiteles, la cupula y los tejados a cuatro
-// aguas. `cumbre` fuerza el vertice en planta; sin el se usa el centroide, que
+// Cubierta a cuatro aguas sobre una planta cualquiera: faldon desde la fachada
+// hasta un anillo metido hacia dentro y mas alto, y ese anillo tapado con su
+// propia triangulacion. Devuelve donde plantar la chimenea.
+//
+// Antes esto era una piramide: un abanico de triangulos desde un punto interior
+// hasta cada arista de la fachada. En una planta concava el abanico CRUZA el
+// entrante -el triangulo que va de una arista al vertice del otro ala pasa por
+// encima del patio- y ahi el tejado se ve flotando. Y no lo cazaba nadie: todos
+// los VERTICES del abanico estan en la huella o dentro de ella, asi que ?test,
+// que medía vertices, lo daba por bueno mientras se veia desde la calle. Vuelo
+// peor del abanico: 20,2 m. Con faldon y tapa: 2,2 m, y solo tres casas pasan
+// de 1 m.
+//
+// La tapa se triangula con orejas (ShapeUtils), que cubre exactamente el anillo
+// y ni un metro mas, sea concavo o no. Ahi esta la diferencia con el abanico.
+function hipRoof(poly, top, alto, col, roof) {
+  // Metido proporcional al tamano de la planta, con tope: una casa de pueblo no
+  // tiene 3 m de faldon, y una nave grande sin tope se queda sin tapa.
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    area += p[0] * q[1] - q[0] * p[1];
+  }
+  const base = Math.max(0.8, Math.min(2.5, Math.sqrt(Math.abs(area) * 0.5) * 0.12));
+
+  // En una planta estrecha el anillo metido se cruza consigo mismo, asi que se
+  // prueba cada vez menos hasta que salga uno limpio. Si ninguno vale (49 casas
+  // de 3545, las mas delgadas) la tapa se pone plana sobre la propia huella: un
+  // terrado no queda tan bien como un tejado, pero no cuelga sobre nada.
+  let anillo = null;
+  for (const f of [1, 0.6, 0.35, 0.2, 0.1]) {
+    anillo = insetRing(poly, base * f);
+    if (anillo) break;
+  }
+  const plano = !anillo;
+  if (plano) anillo = poly.map((p) => p.slice());
+
+  const y1 = top + (plano ? alto * 0.35 : alto);
+  const dentro = [0, top - 1.0, 0];
+  for (const p of anillo) { dentro[0] += p[0] / anillo.length; dentro[2] += p[1] / anillo.length; }
+
+  // Faldon: un par de triangulos por fachada, de la linea de cornisa al anillo.
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length;
+    const a = [poly[i][0], top, poly[i][1]], b = [poly[j][0], top, poly[j][1]];
+    const c = [anillo[j][0], y1, anillo[j][1]], e = [anillo[i][0], y1, anillo[i][1]];
+    roof.tri(a, b, c, dentro, col);
+    roof.tri(a, c, e, dentro, col);
+  }
+
+  // Tapa.
+  const contour = anillo.map((p) => new THREE.Vector2(p[0], p[1]));
+  const tapa = THREE.ShapeUtils.triangulateShape(contour, []);
+  for (const t of tapa) {
+    const [a, b, c] = t.map((i) => [anillo[i][0], y1, anillo[i][1]]);
+    roof.tri(a, b, c, dentro, col);
+  }
+
+  // Chimenea: sobre la tapa -a su altura, que baja si ha salido plana- y en un
+  // punto interior de verdad, no en el centroide del anillo (en una L se sale).
+  const c = safeInterior(anillo);
+  return c ? [c[0], y1, c[1]] : null;
+}
+
+// Si el anillo se cruza consigo mismo. O(n2) sobre pares de aristas no vecinas,
+// y solo se llama para el punado de plantas que no admiten anillo metido.
+function seCruza(poly) {
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;        // aristas vecinas por el cierre
+      if (cortan(poly[i], poly[(i + 1) % n], poly[j], poly[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}
+
+function cortan(a, b, c, d) {
+  const s = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const d1 = s(a, b, c), d2 = s(a, b, d), d3 = s(c, d, a), d4 = s(c, d, b);
+  return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+}
+
+// Anillo metido `t` metros por la bisectriz de cada vertice. Devuelve null si el
+// resultado no sirve: o algun vertice se ha salido de la huella, o una arista se
+// ha dado la vuelta -senal de que el anillo se cruza consigo mismo y la tapa
+// saldria hecha un nudo-.
+function insetRing(poly, t) {
+  const n = poly.length;
+  const norma = (v) => { const l = Math.hypot(v[0], v[1]); return l > 1e-9 ? [v[0] / l, v[1] / l] : null; };
+  // El sentido de giro ya viene normalizado, pero no cuesta nada probar los dos y
+  // quedarse con el que mete el anillo hacia dentro.
+  for (const signo of [1, -1]) {
+    const out = [];
+    let ok = true;
+    for (let i = 0; i < n && ok; i++) {
+      const p = poly[i], a = poly[(i - 1 + n) % n], b = poly[(i + 1) % n];
+      const e0 = norma([p[0] - a[0], p[1] - a[1]]), e1 = norma([b[0] - p[0], b[1] - p[1]]);
+      if (!e0 || !e1) { ok = false; break; }      // vertice repetido de OSM
+      const n0 = [-e0[1] * signo, e0[0] * signo], n1 = [-e1[1] * signo, e1[0] * signo];
+      const bis = norma([n0[0] + n1[0], n0[1] + n1[1]]) || n1;
+      // 1/sen(medio angulo): en una esquina hay que ir mas lejos para meterse `t`.
+      const cos = n0[0] * n1[0] + n0[1] * n1[1];
+      const escala = Math.min(1 / Math.max(Math.sqrt((1 + cos) * 0.5), 0.35), 2.9);
+      out.push([p[0] + bis[0] * t * escala, p[1] + bis[1] * t * escala]);
+    }
+    if (!ok) continue;
+    if (!out.every(([x, z]) => vuela(poly, x, z) === 0)) continue;
+    const derechas = out.every((_, i) => {
+      const j = (i + 1) % n;
+      const e0 = [poly[j][0] - poly[i][0], poly[j][1] - poly[i][1]];
+      const e1 = [out[j][0] - out[i][0], out[j][1] - out[i][1]];
+      return e0[0] * e1[0] + e0[1] * e1[1] > 0;
+    });
+    // La arista invertida es la senal barata, pero no basta: en un zigzag el
+    // anillo se cruza con aristas que no son vecinas y todas siguen "derechas".
+    // Triangular un anillo cruzado da triangulos por fuera, y ahi estaba el peor
+    // faldon del pueblo (12,4 m sobre una nave en zigzag de 23 vertices).
+    if (derechas && !seCruza(out)) return out;
+  }
+  return null;
+}
+
+// Piramide de base poligonal, para chapiteles, la cupula y la linternilla.
+// `cumbre` fuerza el vertice en planta; sin el se usa el centroide, que
 // en un anillo concavo puede caer fuera.
 function pyramid(ring, y0, y1, col, roof, cumbre) {
   let cx = 0, cz = 0;
@@ -1366,6 +1498,13 @@ function tower(c, u, hw, y0, y1, spire, uv, wall, roof) {
 // recto; en un anillo no estrellado algun pano se pasa un poco. Sobra para 3545
 // casas vistas desde la calle.
 function gableRoof(poly, top, seed, roof, chimneys) {
+  // Un anillo que se cruza consigo mismo no tiene dentro ni fuera, y cualquier
+  // cubierta sobre el sale por donde le parece: el peor faldon colgado del pueblo
+  // -12,8 m- era una tapia dibujada asi en OSM, con 23 vertices, 0,0 m de altura y
+  // una arista final que cruzaba las otras veintidos. Sin cubierta se ve mejor que
+  // con una aleta en el aire.
+  if (seCruza(poly)) return;
+
   const n = poly.length;
   let u = [1, 0], masLarga = -1;
   for (let i = 0; i < n; i++) {
@@ -1392,10 +1531,27 @@ function gableRoof(poly, top, seed, roof, chimneys) {
   // chaflanes, que apenas mueven el area y sin embargo dejan metros de faldon en
   // el aire. Con los dos, 47% de las casas pasan a cuatro aguas y solo quedan 99
   // con mas de 2 m de vuelo (eran 1626); solo con el area harian falta el 63%.
-  const esq = [[umin - EAVES, vmin - EAVES], [umax + EAVES, vmin - EAVES],
-    [umax + EAVES, vmax + EAVES], [umin - EAVES, vmax + EAVES]];
-  const aCuatroAguas = (umax - umin) * (vmax - vmin) > 1.25 * areaPoly
-    || esq.some(([su, sv]) => vuela(poly, u[0] * su + v[0] * sv, u[1] * su + v[1] * sv) > 2.0);
+  // El rectangulo con alero se sondea con una REJILLA, no por las cuatro
+  // esquinas: un entrante en mitad de un lado -una planta en L, una U- deja las
+  // cuatro esquinas pegadas a la fachada y aun asi 6 m de faldon en el aire. Las
+  // doce peores casas del pueblo eran exactamente ese caso, y ninguna pasaba de
+  // 1,25 de sobra de area, asi que los dos avisos anteriores no las veian.
+  // La rejilla se mide en METROS, no en un numero fijo de sondas por lado: con
+  // 9x9 en una nave de 60 m quedan 7 m entre sonda y sonda y un entrante mas
+  // estrecho que eso se cuela entero. A 2 m no se cuela.
+  const U0 = umin - EAVES, U1 = umax + EAVES, V0 = vmin - EAVES, V1 = vmax + EAVES;
+  const nu = Math.min(40, Math.max(5, Math.ceil((U1 - U0) / PASO_SONDA)));
+  const nv = Math.min(40, Math.max(5, Math.ceil((V1 - V0) / PASO_SONDA)));
+  let aCuatroAguas = false;
+  for (let i = 0; i < nu && !aCuatroAguas; i++) {
+    for (let j = 0; j < nv; j++) {
+      const su = U0 + (U1 - U0) * (i + 0.5) / nu;
+      const sv = V0 + (V1 - V0) * (j + 0.5) / nv;
+      if (vuela(poly, u[0] * su + v[0] * sv, u[1] * su + v[1] * sv) > VUELO_MAX) {
+        aCuatroAguas = true; break;
+      }
+    }
+  }
 
   let col = seed < 0.45 ? ROOF_THATCH : ROOF_TILE;
   col = mul(col, 0.82 + 0.36 * fract(seed * 7.13));
@@ -1408,10 +1564,9 @@ function gableRoof(poly, top, seed, roof, chimneys) {
     // desplazar el anillo hacia fuera, y es justo lo que sobra aqui.
     const ancho = areaPoly / Math.max(largo, 1e-3);   // anchura media de la planta
     const alto = Math.min(ancho * 0.5 * ROOF_PITCH, ROOF_MAX);
-    const cumbre = safeInterior(poly);
+    const cumbre = hipRoof(poly, top, alto, col, roof);
     if (!cumbre) return;
-    pyramid(poly, top, top + alto, col, roof, cumbre);
-    [cx, cy, cz] = [cumbre[0], top + alto, cumbre[1]];
+    [cx, cy, cz] = cumbre;
   } else {
     umin -= EAVES; umax += EAVES; vmin -= EAVES; vmax += EAVES;
 

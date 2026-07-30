@@ -85,6 +85,15 @@ leen como ruido en vez de como ventanas.
   a voleo por los 3600x2100 m dejaba al vecino mas cercano a 82 m del punto de
   aparicion y el pueblo parecia deshabitado. Solo se simula lo que esta a menos
   de 120 m de la camara.
+- **Cubiertas** (`world.js`): dos aguas sobre el rectangulo orientado de la
+  planta cuando ese rectangulo la representa, y cuatro aguas truncadas sobre la
+  huella real -faldon hasta un anillo metido hacia dentro, y ese anillo tapado
+  con su triangulacion de orejas- cuando no. La decision se toma sondeando el
+  rectangulo cada 2 m: por las cuatro esquinas no se ve el entrante de una planta
+  en L, que es donde salian los tejados flotando. La piramide en abanico que se
+  usaba antes para las cuatro aguas se sale sola en cuanto la planta es concava:
+  sus TRIANGULOS cruzan el patio aunque todos sus vertices esten en la huella.
+  Medido en vuelo del peor triangulo: 17,8 m antes, 3,2 m ahora (`?test`).
 - **Encargos** (`tramas.js` + `quests.js`): procedurales. Un encargo es una
   FORMA (cuatro arcos de tres o cuatro pasos: quien te manda, a donde vas, quien
   recibe el recado) mas un TEMA (ocho: los lobos de la dehesa, el agua de la

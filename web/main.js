@@ -237,14 +237,18 @@ if (q.has('test')) {
   for (let i = 0; i < 60; i++) { paso(1 / 60); vuelo = Math.max(vuelo, player.pos.y - suelo0); }
   const posado = Math.abs(player.pos.y - suelo0) < 0.01;
 
-  // C) Cada vertice de la malla de cubiertas tiene que caer sobre alguna huella,
-  // o como mucho a un alero de ella. Es la comprobacion del faldon flotante: si
-  // gableRoof vuelve a tirar el tejado sobre el rectangulo envolvente en vez de
-  // sobre la planta, este contador se dispara.
+  // C) Cada TRIANGULO de la malla de cubiertas tiene que caer sobre alguna
+  // huella, o como mucho a un alero de ella. Es la comprobacion del faldon
+  // flotante.
+  //
+  // Se miran el baricentro y los puntos medios de los lados, no solo los tres
+  // vertices. Medir vertices dejaba pasar el fallo que importa: el abanico de la
+  // piramide tenia todos sus vertices dentro de la huella y sus triangulos
+  // cruzando el patio de una planta en L, hasta 20 m de tejado sobre el vacio con
+  // esta prueba en verde. Un triangulo se ve por su superficie, no por sus
+  // esquinas, y hay que medirlo donde se ve.
   const vc = world.getObjectByName('Cubiertas').geometry.getAttribute('position');
-  let colgados = 0, peor = 0;
-  for (let i = 0; i < vc.count; i++) {
-    const x = vc.getX(i), z = vc.getZ(i);
+  const fuera = (x, z) => {
     let d = Infinity;
     for (const flat of player.cerca(x, z)) {
       const p = [];
@@ -252,20 +256,36 @@ if (q.has('test')) {
       d = Math.min(d, vuela(p, x, z));
       if (d === 0) break;
     }
-    if (d > 2.5) { colgados++; peor = Math.max(peor, d === Infinity ? 0 : d); }
+    return d === Infinity ? 0 : d;
+  };
+  let colgados = 0, peor = 0, sondas = 0;
+  for (let i = 0; i + 2 < vc.count; i += 3) {
+    const t = [0, 1, 2].map((k) => [vc.getX(i + k), vc.getZ(i + k)]);
+    const puntos = [[(t[0][0] + t[1][0] + t[2][0]) / 3, (t[0][1] + t[1][1] + t[2][1]) / 3],
+      ...t, ...[[0, 1], [1, 2], [2, 0]].map(([a, b]) =>
+        [(t[a][0] + t[b][0]) / 2, (t[a][1] + t[b][1]) / 2])];
+    for (const [x, z] of puntos) {
+      sondas++;
+      const d = fuera(x, z);
+      if (d > 2.5) { colgados++; peor = Math.max(peor, d); }
+    }
   }
-  const pctColgados = 100 * colgados / vc.count;
+  const pctColgados = 100 * colgados / sondas;
 
-  // 0.50 discrimina: con el tejado sobre el rectangulo envolvente esto daba
-  // 3.13% (el peor vertice a 25 m de cualquier fachada), y ahora da 0.02%.
-  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.5
+  // Los limites discriminan: medido asi, con la piramide en abanico esto daba
+  // 0.166% y 17.8 m de vuelo en el peor triangulo; ahora da 0.001% y 3.2 m, que
+  // es del orden del alero. El limite del PEOR importa tanto como el porcentaje:
+  // ocho triangulos de 850.000 no mueven el tanto por ciento y sin embargo uno
+  // solo, si vuela 20 m, se ve desde la calle.
+  const ok = hundimiento < 0.5 && coladas === 0 && pctColgados < 0.01 && peor < 4.0
     && vuelo > 0.6 && vuelo < 1.2 && posado;
   const informe = [...lineas,
     `hundimiento maximo bajo el terreno: ${hundimiento.toFixed(2)} m (limite 0.50)`,
     `contra ${muestra.length} fachadas desde 3.0 m: se cuelan ${coladas}`
     + ` (avance maximo ${avance.toFixed(2)} m de 13.6 m libres, limite 4.0)`,
-    `cubierta colgada sobre el vacio: ${pctColgados.toFixed(2)}% de los vertices a mas`
-    + ` de 2.5 m de una fachada, el peor a ${peor.toFixed(1)} m (limite 0.50%)`,
+    `cubierta colgada sobre el vacio: ${pctColgados.toFixed(3)}% de ${sondas} sondas`
+    + ` (baricentro, vertices y puntos medios de cada triangulo) a mas de 2.5 m de`
+    + ` una fachada, la peor a ${peor.toFixed(1)} m (limites 0.01% y 4.0 m)`,
     `salto: sube ${vuelo.toFixed(2)} m (limites 0.60-1.20) y ${posado ? 'vuelve al suelo' : 'NO vuelve al suelo'}`,
     `RESULTADO: ${ok ? 'OK' : 'FALLO'}`].join('\n');
   console.log(informe);
