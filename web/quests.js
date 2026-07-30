@@ -9,7 +9,9 @@ import { generarEncargos } from './tramas.js';
 // mano de player.pos sin arrastrar la dependencia.
 
 const TALK_RANGE = 4.0;      // metros para que aparezca el aviso "E - hablar"
-const LINE_MAX = 46;         // caracteres por linea a 10px monospace, a ojo
+// A 10px monospace un caracter mide 6 px de ancho. Se usa solo como respaldo:
+// lo normal es medirlo, que hay monoespaciadas mas anchas y mas estrechas.
+const CHAR_W = 0.6;
 
 const PARCHMENT = 'rgba(41, 33, 22, 0.92)';
 const INK_FRAME = 'rgb(153, 128, 77)';
@@ -149,20 +151,31 @@ export class Misiones {
     // El objetivo va abajo del todo, justo donde se planta el bocadillo: con el
     // dialogo abierto se veia el texto medio tapado por el marco.
     if (this.dialogo) this._pintarDialogo(ctx, W, H, k);
-    else { this._pintarObjetivo(ctx, W, H, k); this._pintarAviso(ctx, W, H, k); }
+    else this._pintarAviso(ctx, W, H, k, this._pintarObjetivo(ctx, W, H, k));
   }
 
+  // Devuelve la altura que ha ocupado, para que el aviso se plante encima y no
+  // debajo de un objetivo de dos lineas.
+  //
+  // Los objetivos ya no estan escritos a mano: los arma tramas.js con el nombre
+  // real del sitio, y "Busca al pescadero: dicen que el viernes hay que dar de
+  // comer a toda la obra" se salia por la derecha de la ventana. Se parte por
+  // palabras a lo que quepa DE VERDAD, medido, no a 46 caracteres a ojo.
   _pintarObjetivo(ctx, W, H, k) {
     const q = this.actual;
     const texto = q ? q.objetivo : 'Sin mas encargos por esta noche.';
     ctx.font = `${10 * k}px monospace`;
     ctx.fillStyle = INK_DIM;
-    ctx.fillText(texto, 8 * k, H - 8 * k);
+    const lineas = envolver(texto, cabenChars(ctx, W - 16 * k, k));
+    lineas.forEach((linea, i) => {
+      ctx.fillText(linea, 8 * k, H - 8 * k - (lineas.length - 1 - i) * 12 * k);
+    });
+    return lineas.length * 12 * k;
   }
 
   // El aviso sale con CUALQUIERA que tengas al lado. Antes solo aparecia con el
   // objetivo de la mision, asi que 219 de los 220 vecinos parecian decorado.
-  _pintarAviso(ctx, W, H, k) {
+  _pintarAviso(ctx, W, H, k, alto) {
     if (!this.cerca) return;
     const nombre = this.cerca.nombre || this.cerca.tipo || 'alguien';
     const esObjetivo = this._esObjetivo(this.cerca);
@@ -175,7 +188,12 @@ export class Misiones {
     const aviso = esVecino
       ? `E hablar con ${nombre}${esObjetivo ? ' *' : ''}   ·   Q preguntar el camino`
       : `E - mirar ${nombre.toLowerCase()}`;
-    ctx.fillText(aviso, W * 0.5, H - 24 * k);
+    // En una ventana estrecha este aviso tampoco cabe de una pieza: mismo trato.
+    const lineas = envolver(aviso, cabenChars(ctx, W - 16 * k, k));
+    lineas.forEach((linea, i) => {
+      ctx.fillText(linea, W * 0.5,
+        H - 16 * k - alto - (lineas.length - 1 - i) * 12 * k);
+    });
     ctx.textAlign = 'left';
   }
 
@@ -183,10 +201,13 @@ export class Misiones {
     const { lineas, i } = this.dialogo;
     const [nombre, texto] = lineas[i];
     ctx.font = `${10 * k}px monospace`;
-    const envueltas = envolver(ctx, texto, LINE_MAX);
+    // El ancho del bocadillo manda sobre el corte de linea, y no al contrario:
+    // con la ventana estrecha el marco se encogia y el texto seguia a 46
+    // caracteres, saliendose por los dos lados.
+    const boxW = Math.min(W - 24 * k, 420 * k);
+    const envueltas = envolver(texto, cabenChars(ctx, boxW - 20 * k, k));
 
     const boxH = (20 + envueltas.length * 12 + 12) * k;
-    const boxW = Math.min(W - 24 * k, 420 * k);
     const x0 = (W - boxW) * 0.5, y0 = H - boxH - 12 * k;
 
     ctx.fillStyle = PARCHMENT;
@@ -213,10 +234,17 @@ export class Misiones {
 
 // --- ayudantes ----------------------------------------------------------------
 
+// Cuantos caracteres caben en `px`. Se mide, porque "monospace" es la que haya
+// puesto el sistema y no todas tienen el mismo paso; si la fuente no esta lista
+// todavia, measureText devuelve 0 y se cae al ancho nominal en vez de a NaN.
+function cabenChars(ctx, px, k) {
+  const w = ctx.measureText('0123456789').width / 10 || CHAR_W * 10 * k;
+  return Math.max(8, Math.floor(px / w));
+}
+
 // Envuelve `texto` a lineas de como mucho `max` caracteres, partiendo por
-// palabras. Nada de medir con ctx.measureText: a 10px monospace el ancho de
-// caracter es fijo, y esto evita reflow por fuente no cargada aun.
-function envolver(ctx, texto, max) {
+// palabras.
+function envolver(texto, max) {
   const palabras = texto.split(' ');
   const out = [];
   let linea = '';
