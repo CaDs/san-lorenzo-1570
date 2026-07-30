@@ -48,5 +48,9 @@ if __name__ == '__main__':
               f'\nsoltarlo:        kill $(lsof -t -iTCP:{puerto} -sTCP:LISTEN)'
               f'\no servir en otro: make dev PORT={puerto + 1}', file=sys.stderr)
         sys.exit(1)
-    print(f'http://localhost:{puerto}/web/')
+    # flush: Python solo escribe por lineas cuando la salida es un terminal. Con
+    # `make dev` volcado a un fichero, o en la consola integrada de un editor, la
+    # linea se quedaba en el buffer hasta que el servidor muriera: estaba
+    # levantado y no decia nada. "make dev no hace nada" era esto.
+    print(f'http://localhost:{puerto}/web/', flush=True)
     httpd.serve_forever()
