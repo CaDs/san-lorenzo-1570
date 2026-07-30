@@ -33,11 +33,14 @@ make dev        # http://localhost:8000/web/
   (40,59° N) y el día del año, cielo procedural, estrellas y luna.
 - **220 vecinos** de ocho oficios recorriendo las calles, con perros, ovejas,
   gallinas y pájaros. Se puede hablar con todos.
-- **Encargos** anclados al sitio: la cantera de la Herrería, el aguador y el
-  camino real a Madrid, las obras del Monasterio, los lobos de la dehesa.
+- **Encargos procedurales**: cada partida trae otros tres, armados con los
+  oficios que andan por la calle y los sitios con nombre real de OSM —los lobos
+  de la dehesa, el agua de la argamasa, la campana rajada de San Bernabé—. La
+  semilla se ve en la portada y se repite con `?seed=`.
 - Antorchas, humo de chimenea, y un minimapa en pergamino.
 
-Todo se genera de forma determinista: el pueblo sale igual en cada arranque.
+Todo se genera de forma determinista: el pueblo sale igual en cada arranque, y
+los encargos igual con la misma semilla.
 
 ## Cómo está hecho
 
@@ -65,6 +68,7 @@ Necesita `curl` y los ejecutables de GDAL (`ogr2ogr`, `gdal_translate`,
 
 ```
 make test       # abre web/?test: el jugador anda, no se hunde y las fachadas frenan
+make tramas     # 300 semillas de encargos: ninguna genera un objetivo imposible
 ```
 
 ## Licencia y procedencia de los datos

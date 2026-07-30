@@ -1,6 +1,6 @@
 PORT ?= 8000
 
-.PHONY: dev test data
+.PHONY: dev test tramas data
 
 # El juego no se compila: son ficheros sueltos que sirve cualquier servidor
 # estatico. Se sirve la raiz porque web/ lee ../data/build/.
@@ -12,6 +12,11 @@ dev:
 test:
 	@echo "abre http://localhost:$(PORT)/web/?test y mira la consola"
 	@python3 tools/serve.py $(PORT)
+
+# El generador de encargos no necesita navegador: 300 semillas contra un pueblo
+# de mentira, comprobando que ninguna produzca un encargo imposible.
+tramas:
+	@node web/quests.test.mjs
 
 # Regenera data/build/ desde data/raw/. Necesita GDAL y, si data/raw/ no esta,
 # conexion para descargarlo. Los datos generados ya vienen en el repositorio:

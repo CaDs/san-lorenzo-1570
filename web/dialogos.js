@@ -131,7 +131,7 @@ const ANIMAL = {
 
 // Mezclador sin sin(): las semillas son enteros y crecen, y fract(sin(x)) se
 // degrada. Es el mismo escarmiento que el cielo estrellado de daynight.js.
-function mezcla(...n) {
+export function mezcla(...n) {
   let h = 2166136261;
   for (const v of n) {
     h ^= (v | 0) + 0x9e3779b9;

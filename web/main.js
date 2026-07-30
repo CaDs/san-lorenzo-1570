@@ -74,7 +74,13 @@ scene.add(...vida.objetos);
 // `lugares` sabe como se llaman las calles y los edificios de verdad; `misiones`
 // se lo pasa a los dialogos para que un vecino pueda mandarte a un sitio.
 const lugares = new Lugares(world);
-const misiones = new Misiones(world, vida, lugares);
+// Los encargos se generan (tramas.js) a partir de una semilla: sin ?seed= cada
+// partida trae otros, y con ?seed=1234 se repite el mismo para poder contarlo o
+// depurarlo. El punto de aparicion entra en el generador para que no ponga un
+// destino a veinte pasos del jugador.
+const semilla = q.has('seed') ? (num('seed', 1) >>> 0)
+  : (1 + Math.floor(Math.random() * 999999));
+const misiones = new Misiones(world, vida, lugares, semilla, player.pos);
 
 const hud = document.getElementById('hud');
 hud.width = W; hud.height = H;
@@ -122,6 +128,10 @@ const portada = document.getElementById('portada');
 hud.style.visibility = 'hidden';
 paso(1 / 60);                    // un fotograma detras del titulo (ver `reloj`)
 document.getElementById('estado').textContent = 'pulsa para entrar';
+// La semilla, a la vista: es la unica forma de volver a jugar unos encargos que
+// hayan salido buenos, o de contar cuales salieron mal (?seed=...).
+document.getElementById('sub').innerHTML
+  += ` &middot; encargos n.<sup>o</sup> ${semilla}`;
 portada.addEventListener('click', () => {
   portada.classList.add('fuera');
   hud.style.visibility = 'visible';

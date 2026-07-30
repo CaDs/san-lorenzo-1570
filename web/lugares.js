@@ -20,6 +20,12 @@ const VIENTOS = ['el norte', 'el nordeste', 'el este', 'el sudeste',
 // nombre tal cual lo escribio OSM.
 const ARTICULO = /^(el|la|los|las) /i;
 
+// Nombres que podian existir con las obras del Monasterio en marcha. Se mira el
+// principio del nombre, que en OSM es el tipo de sitio ("Casa de...", "Ermita
+// de...", "Cuartel de..."). Ojo con "Antiguo Palacio de Godoy": ese "antiguo" es
+// de ahora, el palacio es de 1790, y por eso el prefijo no se admite.
+const DE_EPOCA = /^(el |la |los |las )?(real(es)? |primera |segunda |tercera |gran )?(monasterio|casas?|casita|iglesia|ermita|convento|capilla|hospital|palacio|puente|fuente|molino|huerta|galer[ií]a|jard[ií]n|torre|corral|posada|mes[oó]n|fonda|horno|herrer[ií]a|lonja|cantera|cuartel|mercado|san |santa )/i;
+
 export class Lugares {
   constructor(world) {
     this.world = world;
@@ -52,6 +58,20 @@ export class Lugares {
     }
     this.monasterio = this.sitios.find((s) => /monasterio/i.test(s.nombre))
       || this.sitios.slice().sort((a, b) => b.area - a.area)[0];
+
+    // --- los que se pueden nombrar en 1570
+    //
+    // OSM nombra el pueblo de HOY: entre la Casa de la Reina y la Galeria de
+    // convalecientes hay un Ahorramas, un BM y el Centro Cultural. Un vecino
+    // mandando a un caminante al supermercado rompe la epoca de golpe, asi que
+    // los encargos y las indicaciones solo usan esta lista.
+    //
+    // Es una lista BLANCA a proposito: los nombres modernos que puedan aparecer
+    // manana si se recorta otra vez el mapa no se cuelan por descuido. De 69
+    // sitios pasan unos 27, que siguen siendo mas destinos de los que se ven en
+    // una partida.
+    this.antiguos = this.sitios.filter((s) => DE_EPOCA.test(s.nombre));
+    if (this.antiguos.length < 4) this.antiguos = this.sitios;   // por si acaso
 
     // --- indice de calles con nombre, por celdas, para saber por donde vas
     for (const r of d.roads) {
@@ -96,10 +116,11 @@ export class Lugares {
     return mejor;
   }
 
-  // Un sitio con nombre al azar pero estable para quien pregunte.
+  // Un sitio con nombre al azar pero estable para quien pregunte. De los de
+  // epoca: a este lo nombra un vecino en voz alta.
   alAzar(semilla) {
-    if (!this.sitios.length) return null;
-    return this.sitios[Math.abs(semilla) % this.sitios.length];
+    if (!this.antiguos.length) return null;
+    return this.antiguos[Math.abs(semilla) % this.antiguos.length];
   }
 
   buscar(texto) {

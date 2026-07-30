@@ -26,7 +26,8 @@ navegador los lee tal cual: `fetch` y `new Float32Array(buffer)`. Los produce
 | `minimap.js` | pergamino de esquina |
 | `trees.js` | arquetipos de encina y pino, instanciados |
 | `npcs.js` | vecinos, perros, ovejas, gallinas y pajaros |
-| `quests.js` | cadena de encargos y dialogos |
+| `quests.js` | el hilo del encargo en curso y el pergamino de dialogo |
+| `tramas.js` | generador de encargos: formas, temas y huecos |
 | `humo.js` | humo de las chimeneas |
 | `main.js` | camara, revelado, portada y bucle |
 | `lugares.js` | los sitios con su nombre real, rumbos y distancias |
@@ -84,9 +85,17 @@ leen como ruido en vez de como ventanas.
   a voleo por los 3600x2100 m dejaba al vecino mas cercano a 82 m del punto de
   aparicion y el pueblo parecia deshabitado. Solo se simula lo que esta a menos
   de 120 m de la camara.
-- **Encargos** (`quests.js`): cuatro pasos anclados al sitio real -la cantera de
-  la Herreria, el aguador y el camino real a Madrid, las obras del Monasterio,
-  los lobos de la dehesa- con dialogo en pergamino.
+- **Encargos** (`tramas.js` + `quests.js`): procedurales. Un encargo es una
+  FORMA (cuatro arcos de tres o cuatro pasos: quien te manda, a donde vas, quien
+  recibe el recado) mas un TEMA (ocho: los lobos de la dehesa, el agua de la
+  argamasa, la campana rajada de San Bernabe, el pliego de Su Majestad...) con
+  los huecos rellenados con los oficios que estan VIVOS y con los 28 sitios de
+  epoca de OSM. Se generan tres seguidos al arrancar, a partir de una semilla que
+  se ve en la portada: `?seed=1234` devuelve los mismos, que es lo unico que hace
+  depurable un generador. Los destinos se filtran por nombre -OSM nombra el
+  pueblo de hoy, y un vecino de 1570 no manda a nadie al Ahorramas- y salen a mas
+  de 180 m del punto de aparicion, o se darian por alcanzados antes de que te los
+  encarguen. `make tramas` prueba 300 semillas sin navegador.
 - **Conversacion** (`dialogos.js` + `lugares.js`): se puede hablar con los 220,
   no solo con el objetivo de la mision. Cada vecino tiene frases de su oficio,
   saludo segun la hora y rumores; la eleccion es determinista por vecino, asi
