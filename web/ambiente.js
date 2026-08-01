@@ -235,8 +235,11 @@ export function mezclar(env) {
     lumbre: 0.09 * u * deNoche,
     fragua: 0.10 * u * deDia * franja(hora, 7, 19, 1),
 
-    asiento: 0.13 * obra.asiento * lejos,
-    labra: 0.10 * obra.labra * lejos,
+    // La obra esta DONDE esta. Sin el factor de urbanidad los mazos se oian
+    // igual de fuerte desde la Silla de Felipe II, a dos kilometros y medio del
+    // tajo, que desde la lonja: el sonido decia que la cantera te rodeaba.
+    asiento: 0.13 * obra.asiento * lejos * u,
+    labra: 0.10 * obra.labra * lejos * u,
   };
   for (const k in g) g[k] = clamp(g[k] * mudo, 0, 1);
   return g;

@@ -38,10 +38,11 @@ const SIMBOLO = {
 };
 
 export class Barra {
-  constructor({ cielo, misiones, sonido }) {
+  constructor({ cielo, misiones, sonido, world }) {
     this.cielo = cielo;
     this.misiones = misiones;
     this.sonido = sonido;
+    this.world = world;
     this.abierto = null;
 
     const el = document.createElement('div');
@@ -50,6 +51,7 @@ export class Barra {
       <button class="chip" id="c-tiempo"><span class="ico">◐</span><span class="lbl"></span><kbd>P</kbd></button>
       <button class="chip" id="c-clima"><span class="ico" id="c-clima-ico">☁</span><span class="lbl"></span></button>
       <div class="grow"></div>
+      <button class="chip" id="c-monte"><span class="ico">🌲</span><span class="lbl"></span></button>
       <button class="chip" id="c-sonido"><span class="ico" id="c-sonido-ico">♪</span><span class="lbl"></span></button>
       <button class="chip" id="c-misterios"><span class="ico">✦</span><span class="lbl"></span></button>
       <button class="chip" id="c-saber"><span class="ico">✎</span><span class="lbl"></span></button>
@@ -72,6 +74,13 @@ export class Barra {
     el.querySelector('#c-clima').onclick = () => this.alternar('clima');
     el.querySelector('#c-ayuda').onclick = () => this.alternar('ayuda');
     el.querySelector('#c-misterios').onclick = () => this.alternar('misterios');
+    // El monte de 1570 o el de hoy. Es un interruptor y no un panel porque son
+    // dos estados y no hay nada que graduar; lo que hace falta explicar va en el
+    // panel del saber, no en un desplegable de la barra.
+    el.querySelector('#c-monte').onclick = () => {
+      this.world.setEpoca(this.world.epoca === '1570' ? 'hoy' : '1570');
+      this.repintar();
+    };
     // Interruptor, sin panel: mientras la unica capa sea la campana no hay nada
     // que regular. El deslizador de volumen, cuando haya mezcla que dosificar.
     el.querySelector('#c-sonido').onclick = () => {
@@ -300,6 +309,13 @@ export class Barra {
     // El chip dice la verdad del audio. Si el navegador lo bloquea se ve, en vez
     // de dejar un juego mudo sin explicacion: ese es el fallo que hace perder una
     // tarde buscando en el codigo lo que estaba en la politica del navegador.
+    // El monte: el chip dice QUE se esta viendo, no que pasaria al pulsarlo. Un
+    // boton que dice "hoy" mientras ensena 1570 se lee al reves la mitad de las
+    // veces.
+    const ep = this.world.epoca;
+    q('#c-monte .lbl').textContent = ep === 'hoy' ? 'pinar de hoy' : 'melojar, 1570';
+    q('#c-monte').classList.toggle('off', ep === 'hoy');
+
     const so = this.sonido;
     q('#c-sonido-ico').textContent = so.on && so.estado === 'sonando' ? '♪' : '⊘';
     q('#c-sonido .lbl').textContent = so.estado !== 'sonando' ? so.estado

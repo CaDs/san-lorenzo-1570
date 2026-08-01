@@ -382,7 +382,7 @@ function terrainMaterial(roca = 1.0, uClima) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uClima = uClima;
-    shader.fragmentShader = 'uniform vec2 uClima;\n' + shader.fragmentShader;
+    shader.fragmentShader = 'uniform vec3 uClima;\n' + shader.fragmentShader;
     shader.vertexShader = 'varying vec3 vTPos;\nvarying vec3 vTNorm;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
@@ -447,7 +447,7 @@ function roofMaterial(uClima) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uClima = uClima;
-    shader.fragmentShader = 'uniform vec2 uClima;\n' + shader.fragmentShader;
+    shader.fragmentShader = 'uniform vec3 uClima;\n' + shader.fragmentShader;
     shader.vertexShader = 'varying vec3 vRPos;\nvarying vec3 vRNorm;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
@@ -577,7 +577,10 @@ export class World extends THREE.Group {
     // luz de las ventanas: escribir aqui llega a los tres materiales sin tener
     // que rehornear los 400.000 vertices de color del terreno ni las geometrias
     // de arbol, que llevan el color cocido dentro.
-    this.uClima = { value: new THREE.Vector2(0, 0) };
+    // x = pasto seco de agosto, y = nieve cuajada, z = otono del melojar. El
+    // tercero llego con el melojo: la encina y el pino no cambian de color, asi
+    // que hasta ahora con dos bastaba.
+    this.uClima = { value: new THREE.Vector3(0, 0, 0) };
     this.lampPos = [];
     this.antorchaCerca = null;
     this.pool = [];
@@ -590,6 +593,7 @@ export class World extends THREE.Group {
 
     this.add(this.terrainNode());
     if (this.sierra) this.add(this.sierraNode());
+    if (this.sierra && this.data.sendas) this.add(this.sendasNode());
     // Antes de levantar los muros: buildingNodes() necesita saber por donde
     // pasa una calle para abrirle el soportal en vez de tapiarlo.
     this.buildFachadas();
@@ -601,6 +605,8 @@ export class World extends THREE.Group {
     this.buildOccupancy();
     this.add(this.propsNode());
     this.addTrees();
+    if (this.sierra) this.addSierraTrees();
+    this.setEpoca('1570');
 
     this.humo = new Humo(this.chimeneas);
     this.add(this.humo.objeto);
@@ -822,7 +828,15 @@ export class World extends THREE.Group {
   // terreno, a los tejados y a las copas.
   setClima(c) {
     this.clima = c;
-    this.uClima.value.set(c.seco, c.cubierta);
+    // El ocre del melojar: sube desde primeros de octubre, llena en noviembre y
+    // NO se apaga en enero, que es lo que se acertaria por costumbre. El rebollo
+    // es marcescente: se pone ocre, se seca y aguanta la hoja puesta hasta que
+    // rebrota en abril, y por eso en La Herreria no hay rama pelada en invierno.
+    // El corte en el dia 200 es el punto muerto entre la rampa de otono y la de
+    // primavera, donde las dos valen cero y no hay salto.
+    const d = c.dia ?? 1;
+    const otono = d >= 200 ? smoothstep(274, 310, d) : 1 - smoothstep(95, 120, d);
+    this.uClima.value.set(c.seco, c.cubierta, otono);
     this.precip.cantidad = c.lluvia;
     this.precip.nieve = c.nieve;
     // Las chimeneas tiran de noche... y cuando hace frio. En enero se enciende a
@@ -1243,6 +1257,60 @@ export class World extends THREE.Group {
     return mesh;
   }
 
+  // Las sendas del monte: 700 km de camino, pista y canada real por la sierra.
+  //
+  // La misma cinta que las calles, pero con la mitad de cuidados. No llevan
+  // grafo -los vecinos no salen del casco-, ni alumbrado, ni colision: son por
+  // donde se sube, y sin ellas Abantos y las Machotas son laderas peladas sin
+  // manera de saber por donde se anda. Se muestrean cada 8 m en vez de cada 3:
+  // a 25 m por muestra de terreno, mas detalle es dibujar ruido.
+  sendasNode() {
+    const v = [], nn = [], cc = [];
+    for (const r of this.data.sendas) {
+      const pts = this.walk(r.p, 8.0, true);
+      if (pts.length < 2) continue;
+      const half = r.w * 0.5;
+      const izq = [], der = [];
+      for (let i = 0; i < pts.length; i++) {
+        let dir;
+        if (i === 0) dir = [pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]];
+        else if (i === pts.length - 1) dir = [pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]];
+        else dir = [pts[i + 1][0] - pts[i - 1][0], pts[i + 1][1] - pts[i - 1][1]];
+        let dl = Math.hypot(dir[0], dir[1]);
+        if (dl < 1e-4) { dir = [1, 0]; dl = 1; }
+        const off = [-dir[1] / dl * half, dir[0] / dl * half];
+        const a = [pts[i][0] + off[0], pts[i][1] + off[1]];
+        const b = [pts[i][0] - off[0], pts[i][1] - off[1]];
+        // 25 cm de alzada, no 6: la senda va sobre el terreno GRUESO, y entre dos
+        // muestras a 25 m una ladera se come de sobra los seis centimetros de una
+        // calle. Con eso el camino desaparecia a trozos dentro del monte.
+        izq.push([a[0], this.heightAt(a[0], a[1]) + 0.25, a[1]]);
+        der.push([b[0], this.heightAt(b[0], b[1]) + 0.25, b[1]]);
+      }
+      for (let i = 0; i < pts.length - 1; i++) {
+        for (const p of [izq[i], izq[i + 1], der[i], der[i], izq[i + 1], der[i + 1]]) {
+          v.push(p[0], p[1], p[2]);
+          const nr = this.normalAt(p[0], p[2]);
+          nn.push(nr[0], nr[1], nr[2]);
+          // Mas clara que la calle del pueblo: esto es jabre y roca machacada al
+          // sol, no barro pisado entre fachadas.
+          const m = 1.35 * (0.86 + 0.28 * fract(Math.sin(p[0] * 3.71 + p[2] * 8.13) * 43758.5453));
+          cc.push(ROAD_MUD[0] * m, ROAD_MUD[1] * m, ROAD_MUD[2] * m);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
+    g.computeBoundingSphere();
+    const mesh = new THREE.Mesh(g, terrainMaterial(0.55, this.uClima));
+    mesh.name = 'Sendas';
+    mesh.userData.sinSombra = true;
+    console.log(`sendas: ${this.data.sendas.length} tramos | ${v.length / 9} triangulos`);
+    return mesh;
+  }
+
   // Antorchas de poste a lo largo de las vias transitadas. Sustituyen al
   // alumbrado publico: mas bajas, mas juntas al muro y de luz corta.
   addTorches() {
@@ -1511,9 +1579,78 @@ export class World extends THREE.Group {
     return mesh;
   }
 
-  // Encinar en la dehesa, pinar monte arriba. Dos InstancedMesh de mallas
-  // unitarias escaladas por instancia; el color por instancia da la variedad.
-  // ponytail: los arboles no tienen colision, igual que en Godot.
+  // Que crece en un punto, y en que epoca.
+  //
+  // Esto no es de invencion. La vegetacion potencial de la ladera de Abantos es
+  // MELOJAR -Quercus pyrenaica, el rebollo-, y eso es lo que habia en 1570. El
+  // pinar que se sube hoy es una repoblacion de la Escuela de Ingenieros de
+  // Montes entre 1892 y 1914: 843 hectareas, resinero (Pinus pinaster) de los
+  // 900 a los 1300 m y albar (P. sylvestris) por encima. Cuatro siglos despues
+  // del pueblo que se juega aqui.
+  //
+  // Lo que NO cambia entre las dos epocas, y por eso va en 'comun':
+  //   - La Herreria: fresneda adehesada en las vaguadas y melojar en lo alto.
+  //   - Las Machotas y las solanas del sur: encinar con enebro de la miera,
+  //     que es monte seco de roca y jara y nunca se repoblo.
+  //   - Por encima de los 1700 m: piornal serrano (Cytisus oromediterraneus).
+  //     Abantos se queda en 1753, o sea que la cumbre es matorral y no bosque, y
+  //     eso es igual de cierto en 1570 que hoy.
+  //
+  // La solana se saca de la normal del terreno: +Z es el sur, asi que una
+  // ladera que mira al sur tiene la normal con Z positiva. Es mas seca, y ahi
+  // manda la encina aunque este a la misma cota que un melojar de umbria.
+  especieEn(x, y, z, nrm, epoca) {
+    if (y > 1700) return 'piorno';
+    const dado = (a, b) => fract(hash(x * a, z * b) * 13.7);
+
+    // La repoblacion de 1892, de los 1050 para arriba. Ese suelo era melojar y
+    // hoy es pinar; por debajo la Escuela no toco nada, y por eso el pueblo y La
+    // Herreria se ven igual en las dos epocas y el monte no.
+    if (epoca === 'hoy' && y > 1050) {
+      if (y > 1600) return dado(1.1, 0.9) < 0.5 ? 'piorno' : 'albar';
+      return y > 1300 ? 'albar' : 'resinero';
+    }
+
+    // Arriba el melojar se ralea y se mete el piornal, hasta que gana del todo.
+    if (y > 1500) return dado(1.1, 0.9) < 0.45 ? 'piorno' : 'melojo';
+
+    // Encinar con enebro de la miera: solana SECA Y BAJA, o sea el monte de las
+    // Machotas, de roca y jara. El techo de 1200 m no es un adorno: la ladera de
+    // Abantos que mira al pueblo tambien es solana, y con el techo puesto en
+    // 1450 salia encinar a 1443 m -encina donde va el rebollo y donde hoy hay
+    // pino albar-. La encina de esta sierra no pasa de los 1200 y pico.
+    // +Z es el sur, asi que la normal con Z positiva es ladera de solana.
+    if (nrm[2] > 0.15 && y < 1200) return dado(1.3, 0.7) < 0.30 ? 'enebro' : 'encina';
+
+    // Vaguadas de La Herreria: fresneda adehesada mezclada con el melojar.
+    if (y < 1000) return dado(0.7, 1.9) < 0.55 ? 'fresno' : 'melojo';
+    return 'melojo';
+  }
+
+
+  // Cuanto bosque hay en un punto, de 0 a 1. Manchas por ruido gordo -claros y
+  // golpes de arboleda- por encima de un fondo que sube con la cota hasta la
+  // linea del arbolado y se cae de golpe por encima de ella.
+  espesuraEn(x, y, z) {
+    const mancha = Math.sin(x * 0.0093 + 2.1) * Math.sin(z * 0.0117 + 0.7);
+    const fondo = smoothstep(880, 1150, y) * (1 - smoothstep(1560, 1720, y) * 0.55);
+    return (0.10 + 0.45 * fondo) * (mancha > 0.1 ? 1.0 : (mancha > -0.35 ? 0.45 : 0.15));
+  }
+
+  // Un arbol se planta a la vez para las dos epocas. Casi todos coinciden -La
+  // Herreria y las Machotas no cambiaron- y solo la ladera de Abantos tiene dos
+  // respuestas, asi que en vez de dos arboledas enteras se marcan como 'comun'
+  // los que valen para las dos y se duplican unicamente los que difieren.
+  _plantar(sitios, base) {
+    const e1 = this.especieEn(base.x, base.y, base.z, base.nrm, '1570');
+    const e2 = this.especieEn(base.x, base.y, base.z, base.nrm, 'hoy');
+    if (e1 === e2) sitios.push({ ...base, esp: e1, epoca: 'comun' });
+    else {
+      sitios.push({ ...base, esp: e1, epoca: '1570' });
+      sitios.push({ ...base, esp: e2, epoca: 'hoy' });
+    }
+  }
+
   addTrees() {
     const sx = this.data.size_m[0], sz = this.data.size_m[1];
     const sitios = [];
@@ -1528,26 +1665,86 @@ export class World extends THREE.Group {
         const nrm = this.normalAt(x, z);
         if (nrm[1] < 0.55) continue;                   // roquedo pelado
         const y = this.heightAt(x, z);
-        // Manchas de bosque por ruido gordo: claros y golpes de arboleda, mas
-        // espeso monte arriba (pinar) que en la dehesa (encinas sueltas).
-        const mancha = Math.sin(x * 0.0093 + 2.1) * Math.sin(z * 0.0117 + 0.7);
-        const pinar = y > TREE_LINE;
-        const dens = pinar ? (mancha > 0.1 ? 0.55 : 0.20) : (mancha > 0.25 ? 0.30 : 0.09);
         const h3 = fract(h2 * 91.173);
-        if (h3 > dens) continue;
-        const esc = 0.8 + fract(h3 * 57.13) * 0.5;
-        const yaw = h1 * TAU;
-        // Solo la SIEMBRA vive aqui: que forma tiene un arbol lo decide
-        // trees.js. Antes esto eran cajas y conos escalados y se veia.
-        sitios.push({ x, y, z, yaw, esc, pinar: pinar && h3 < dens * 0.8, tono: h2 });
+        if (h3 > this.espesuraEn(x, y, z)) continue;
+        this._plantar(sitios, { x, y, z, yaw: h1 * TAU,
+          esc: 0.8 + fract(h3 * 57.13) * 0.5, tono: h2, nrm });
       }
     }
 
-    const arboles = crearArboleda(sitios, this.uClima);
-    this.add(...arboles);
-    const pinos = sitios.filter((s) => s.pinar).length;
-    console.log(`vida: ${sitios.length} arboles (${pinos} pinos) en`
-      + ` ${arboles.length} mallas`);
+    this.arboles = crearArboleda(sitios, this.uClima);
+    this.add(...this.arboles);
+    const cuenta = {};
+    for (const s of sitios) cuenta[s.esp] = (cuenta[s.esp] || 0) + 1;
+    console.log(`vida: ${sitios.length} arboles en el casco (${
+      Object.entries(cuenta).map(([k, v]) => `${v} ${k}`).join(', ')})`);
+  }
+
+  // El monte de alrededor: la misma regla de especies, pero sembrado mas ralo,
+  // con copas de la mitad de bultos y solo hasta donde se distingue un arbol de
+  // una mancha verde. Mas alla de ese radio lo que se ve es el color del
+  // terreno, y plantar 400.000 arboles para eso no es fidelidad, es lastre.
+  addSierraTrees() {
+    // El radio y el paso salen de una cuenta, no de probar numeros. Con retícula
+    // de 20 m no caben mas de 25 pies por hectarea aunque la densidad sea 1, y un
+    // melojar de verdad lleva de 300 a 600: el monte salia a dehesa pastada. A
+    // 14 m caben 51, que con las copas del monte -mas anchas que las del pueblo-
+    // ya cierra por arriba. El radio baja de 3000 a 2400 para pagarlo: a mas de
+    // dos kilometros no se distingue un arbol de una mancha verde.
+    const R = 2400;                    // m desde el centro del pueblo
+    const CX = 1800, CZ = 1050;
+    const PASO = 14;
+    const s = this.sInfo;
+    const sitios = [];
+    const x0 = Math.max(s.x0, CX - R), x1 = Math.min(s.x0 + s.w * s.res, CX + R);
+    const z0 = Math.max(s.z0, CZ - R), z1 = Math.min(s.z0 + s.h * s.res, CZ + R);
+
+    for (let gx = x0; gx < x1; gx += PASO) {
+      for (let gz = z0; gz < z1; gz += PASO) {
+        if ((gx - CX) ** 2 + (gz - CZ) ** 2 > R * R) continue;
+        if (this.dentroDelCasco(gx, gz) > -30) continue;   // el casco ya tiene los suyos
+        const h1 = hash(gx * 1.7, gz * 1.3);
+        const h2 = fract(h1 * 137.719);
+        const x = gx + (h1 - 0.5) * PASO * 0.9;
+        const z = gz + (h2 - 0.5) * PASO * 0.9;
+        const nrm = this.normalAt(x, z);
+        if (nrm[1] < 0.50) continue;                       // roquedo pelado
+        const y = this.heightAt(x, z);
+        const h3 = fract(h2 * 91.173);
+        // El monte va mas espeso que la dehesa del pueblo, que esta pastada y
+        // partida en cercas: alli el arbol es la excepcion y aqui la regla.
+        if (h3 > this.espesuraEn(x, y, z) * 2.0) continue;
+        // Y mas grandes que los del pueblo. Los de la dehesa estan pastados y
+        // podados a diente; estos son monte cerrado, y las copas tienen que
+        // solaparse para que se lea bosque y no arboles sueltos.
+        this._plantar(sitios, { x, y, z, yaw: h1 * TAU,
+          esc: 1.0 + fract(h3 * 57.13) * 0.7, tono: h2, nrm, barato: true });
+      }
+    }
+
+    const mallas = crearArboleda(sitios, this.uClima);
+    this.arboles = (this.arboles || []).concat(mallas);
+    // Sin sombra: la caja de sombra sigue al jugador con 200 m de semilado, asi
+    // que un arbol a kilometro y medio no proyecta nada util y en cambio hay que
+    // recorrerlo para el mapa.
+    for (const m of mallas) m.userData.sinSombra = true;
+    this.add(...mallas);
+    const cuenta = {};
+    for (const t of sitios) cuenta[t.esp] = (cuenta[t.esp] || 0) + 1;
+    console.log(`monte: ${sitios.length} arboles en ${mallas.length} mallas (${
+      Object.entries(cuenta).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${v} ${k}`).join(', ')})`);
+  }
+
+  // 1570 o el pinar de hoy. Solo enciende y apaga mallas ya construidas: los
+  // arboles que no cambian -La Herreria, las Machotas, el piornal- estan en un
+  // solo cubo marcado 'comun' y no se tocan.
+  setEpoca(e) {
+    this.epoca = e;
+    for (const m of this.arboles || []) {
+      const ep = m.userData.epoca;
+      if (ep && ep !== 'comun') m.visible = ep === e;
+    }
   }
 
   // Indice de la huella mas grande del mapa: el Monasterio, con mucha ventaja

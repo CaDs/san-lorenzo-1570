@@ -152,8 +152,8 @@ addEventListener('resize', () => {
 let reloj = 0;
 
 // La barra de mandos. Se construye oculta y sale al entrar al pueblo.
-const sonido = new Sonido({ world, lugares, cielo });
-const barra = new Barra({ cielo, misiones, sonido });
+const sonido = new Sonido({ world, lugares, cielo, vida });
+const barra = new Barra({ cielo, misiones, sonido, world });
 let ticBarra = 0;
 
 // La portada esta puesta desde el HTML, asi que el titulo se ve desde el primer

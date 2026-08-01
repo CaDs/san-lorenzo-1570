@@ -280,6 +280,7 @@ function cuajada(semilla, bloque) {
 function salida(estado, semilla, dia, hora, bloque) {
   const t = temperatura(semilla, dia, hora, estado.nublado);
   return {
+    dia,
     estado: estado.key,
     nombre: estado.nombre,
     lluvia: estado.lluvia,

@@ -23,6 +23,24 @@ calles: 3,6 x 2,1 km. El de la sierra -Ring B- va a 25 m y es solo relieve, 14 x
 cuatro bordes del primero caen justo encima de una linea de la rejilla del
 segundo, y de eso depende que el hueco se recorte sin dejar diente de sierra.
 
+El Ring B trae ademas las sendas del monte: 700 km de camino, pista y canada de
+OSM, sin grafo ni colision. Son paisaje, no viario.
+
+## La vegetacion
+
+Siete especies, repartidas por cota y por solana, no a boleo. La cumbre de
+Abantos (1753 m) es piornal y no bosque; la ladera es melojar; las vaguadas de La
+Herreria son fresneda adehesada; las solanas secas y bajas, encinar con enebro de
+la miera.
+
+Y hay dos montes, con un interruptor en la barra. El pinar de Abantos que se sube
+hoy es una repoblacion de la Escuela de Ingenieros de Montes entre 1892 y 1914 -
+resinero de 900 a 1300 m, albar por encima. En 1570 esa ladera era melojar, que
+es su vegetacion potencial. Se planta el de 1570 por defecto. Lo que la
+repoblacion no toco -La Herreria, las Machotas, el piornal- no se duplica: va
+marcado 'comun' y se ve igual en las dos epocas, que es exactamente lo que pasa
+en el monte de verdad.
+
 ## Ficheros
 
 | aqui | que es |
@@ -32,7 +50,8 @@ segundo, y de eso depende que el hueco se recorte sin dejar diente de sierra.
 | `player.js` | andar, correr, volar, colision contra fachadas |
 | `minimap.js` | pergamino de esquina |
 | `ambiente.js` | que deberia oirse, en numeros: puro, con su test de node |
-| `sonido.js` | el grafo de Web Audio; ahora mismo, la campana del Monasterio |
+| `sonido.js` | el grafo de Web Audio: capas de ruido, bichos y la campana |
+| `trees.js` | siete especies instanciadas, de la fresneda al piornal |
 | `trees.js` | arquetipos de encina y pino, instanciados |
 | `npcs.js` | vecinos, perros, gatos, vacas, ovejas, gallinas, pajaros y el rey |
 | `quests.js` | el hilo del encargo en curso y el pergamino de dialogo |

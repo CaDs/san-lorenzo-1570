@@ -458,6 +458,67 @@ for p in polys:
         b_out["a"] = p["a"]
     out.append(b_out)
 
+# ------------------------------------------------------- sendas de la sierra
+# Los caminos del monte, para que Abantos y las Machotas no sean laderas peladas
+# sin por donde subir. Solo geometria: ni anchura por tipo ni alumbrado ni grafo.
+# Los vecinos no salen del casco, asi que esto es paisaje y no viario.
+#
+# Lo que cae DENTRO del casco se tira entero: ahi ya estan las mismas vias con su
+# anchura de verdad, y dibujarlas dos veces deja dos cintas superpuestas peleando
+# por el z-buffer.
+print("5b/6 leyendo las sendas de la sierra ...", flush=True)
+pfeats = []
+for el in json.load(open(f"{RAW}/paths_sierra.json"))["elements"]:
+    geom = el.get("geometry") or []
+    if len(geom) < 2:
+        continue
+    pfeats.append({"type": "Feature", "properties": {"k": el["tags"].get("highway")},
+                   "geometry": {"type": "LineString",
+                                "coordinates": [(p["lon"], p["lat"]) for p in geom]}})
+tmpp4326, tmpp25830 = f"{BUILD}/_p4326.geojson", f"{BUILD}/_p25830.geojson"
+json.dump({"type": "FeatureCollection", "features": pfeats}, open(tmpp4326, "w"))
+if os.path.exists(tmpp25830):
+    os.remove(tmpp25830)
+sh(["ogr2ogr", "-f", "GeoJSON", "-s_srs", "EPSG:4326", "-t_srs", "EPSG:25830",
+    tmpp25830, tmpp4326])
+
+# Una pista forestal es mas ancha que una senda de cabras, y se nota subiendo.
+SENDA_W = {"track": 3.0, "bridleway": 2.2, "path": 1.6}
+sendas, sm = [], 0.0
+SX0w, SZ0w = SX0 - X0, Y1 - SY1                  # esquina NO de la sierra, en mundo
+SXw, SZw = SX1 - SX0, SY1 - SY0
+for f in json.load(open(tmpp25830))["features"]:
+    pts = []
+    for x, y in f["geometry"]["coordinates"]:
+        pt = (round(x - X0, 1), round(Y1 - y, 1))
+        if pts and abs(pt[0] - pts[-1][0]) < 1.0 and abs(pt[1] - pts[-1][1]) < 1.0:
+            continue                              # 1 m: al monte no le hace falta mas
+        pts.append(pt)
+    # Se parte en tramos: dentro de la sierra Y fuera del casco.
+    runs, run = [], []
+    for pt in pts:
+        enSierra = (SX0w <= pt[0] <= SX0w + SXw) and (SZ0w <= pt[1] <= SZ0w + SZw)
+        enCasco = (0 <= pt[0] <= X1 - X0) and (0 <= pt[1] <= Y1 - Y0)
+        if enSierra and not enCasco:
+            run.append(pt)
+        else:
+            if len(run) >= 2:
+                runs.append(run)
+            run = []
+    if len(run) >= 2:
+        runs.append(run)
+    w = SENDA_W.get(f["properties"]["k"], 1.6)
+    for r in runs:
+        flat = []
+        for i, pt in enumerate(r):
+            if i:
+                sm += ((pt[0] - r[i - 1][0]) ** 2 + (pt[1] - r[i - 1][1]) ** 2) ** 0.5
+            flat += [pt[0], pt[1]]
+        sendas.append({"w": w, "p": flat})
+for f in (tmpp4326, tmpp25830):
+    os.remove(f)
+print(f"    {len(sendas)} tramos de senda, {sm / 1000:.1f} km")
+
 world = {
     "origin_utm": [X0, Y0], "epsg": 25830,
     "size_m": [X1 - X0, Y1 - Y0],
@@ -467,6 +528,7 @@ world = {
                "x0": SX0 - X0, "z0": Y1 - SY1, "min": smin, "max": smax},
     "buildings": out,
     "roads": roads,
+    "sendas": sendas,
 }
 json.dump(world, open(f"{BUILD}/world.json", "w"))
 for f in (tmp4326, tmp25830, tmpr4326, tmpr25830):
@@ -474,4 +536,5 @@ for f in (tmp4326, tmp25830, tmpr4326, tmpr25830):
 
 print(f"\nOK  {len(out)} edificios | {len(roads)} tramos de calle | "
       f"terreno {dem_w}x{dem_h} ({X1-X0}x{Y1-Y0} m) | cota {hmin:.0f}-{hmax:.0f} m\n"
-      f"    sierra {sw}x{shh} a {res_s} m ({SX1-SX0}x{SY1-SY0} m) | cota {smin:.0f}-{smax:.0f} m")
+      f"    sierra {sw}x{shh} a {res_s} m ({SX1-SX0}x{SY1-SY0} m) | cota {smin:.0f}-{smax:.0f} m\n"
+      f"    {len(sendas)} tramos de senda por el monte, {sm/1000:.1f} km")

@@ -17,3 +17,4 @@ export UA="san-lorenzo/1.0 (+https://github.com/amra/san-lorenzo)"
 # el terreno fino y el grueso se toquen vertice con vertice.
 export SX0=396000 SX1=410100 SY0=4488000 SY1=4500100
 export SIERRA_RES=25   # m/px -> 564 x 484
+export SLAT0=40.5362 SLON0=-4.2280 SLAT1=40.6469 SLON1=-4.0633

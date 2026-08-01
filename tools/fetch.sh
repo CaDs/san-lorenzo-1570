@@ -39,4 +39,10 @@ overpass "Edificios" data/raw/buildings.json \
 overpass "Viario" data/raw/roads.json \
   "way[\"highway\"][\"highway\"!~\"^(proposed|construction|raceway|bus_guideway)\$\"][\"area\"!=\"yes\"]($LAT0,$LON0,$LAT1,$LON1);out body geom;"
 
+# Las sendas del monte. Solo camino, pista y canada: nada de acera ni escalera,
+# que fuera del casco esas son las de los pueblos vecinos, que aqui no se
+# levantan, y saldrian aceras sueltas en mitad de la nada.
+overpass "Sendas de la sierra" data/raw/paths_sierra.json \
+  "way[\"highway\"~\"^(path|track|bridleway)\$\"]($SLAT0,$SLON0,$SLAT1,$SLON1);out body geom;"
+
 echo "OK -> data/raw/"

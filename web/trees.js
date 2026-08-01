@@ -13,13 +13,24 @@ import * as THREE from 'three';
 // instancia. El presupuesto de triangulos lo manda el numero de arquetipos y
 // sus lados, no el numero de arboles.
 
-const OAK_GREEN = [0.062, 0.092, 0.048];
-const PINE_GREEN = [0.046, 0.075, 0.044];
+// El verde va codificado en la RAZON G/R, y no es decoracion: el shader saca de
+// ese solo numero si una hoja se apolva en agosto, si se pone ocre en noviembre y
+// si se le queda la nieve encima. Los cuatro cajones estan separados de sobra:
+//
+//   tronco 0.74  ·  caduca 1.26-1.30  ·  perenne de hoja 1.48  ·  conifera 1.63+
+//
+const OAK_GREEN = [0.062, 0.092, 0.048];      // encina, 1.48
+const MELOJO_GREEN = [0.070, 0.088, 0.040];   // melojo, 1.26 - caduca
+const ASH_GREEN = [0.066, 0.086, 0.046];      // fresno, 1.30 - caduca
+const PINE_GREEN = [0.046, 0.075, 0.044];     // pino, 1.63
+const JUNIPER_GREEN = [0.038, 0.064, 0.036];  // enebro, 1.68
+const BROOM_GREEN = [0.052, 0.095, 0.032];    // piorno, 1.83
 const TRUNK_BROWN = [0.065, 0.048, 0.034];
 
 const TAU = Math.PI * 2;
-const N_OAK = 5;    // encina: 4-6 pedidos, con 5 ya rompe la repeticion a ojo
-const N_PINE = 4;
+// Cuantos ejemplares distintos se hornean de cada especie. Con 4 ya no se lee la
+// repeticion andando; el coste es geometria, no instancias.
+const N_VAR = 4;
 
 const fract = (x) => x - Math.floor(x);
 const hash = (a, b) => fract(Math.sin(a * 12.9898 + b * 78.233) * 43758.5453);
@@ -201,75 +212,95 @@ function addCanopy(soup, rng, center, Rx, Ry, Rz, n, thetaMin, thetaMax, rFracMi
   }
 }
 
-// Encina: tronco corto y grueso con ensanche de raiz, copa densa que empieza
-// baja (mas ancha que alta -- la encina real es asi, no una pina vertical).
-function buildEncina(idx) {
+// Las siete especies, cada una en una linea. Lo que las separa a ojo es la
+// proporcion tronco/copa y donde empieza la copa, no el numero de triangulos:
+//
+//   encina   tronco corto y grueso, copa mas ancha que alta, empieza baja
+//   melojo   el roble de esta ladera: mas alto que la encina y mas erguido, con
+//            la copa irregular y el tronco torcido, que es como sale el rebollo
+//   fresno   de vaguada: alto, delgado, copa estrecha y alta
+//   resinero pino de media ladera, tronco largo y desnudo, copa en sombrilla
+//   albar    el de arriba: mas estrecho y mas erguido que el resinero
+//   enebro   matorral arboreo, casi sin tronco, muy oscuro y compacto
+//   piorno   ni tronco ni copa: una mata baja. Es lo que hay por encima de 1700
+//
+// `blobs` es el presupuesto de bultos de la copa y por tanto casi todo el coste.
+// Los del monte llevan menos que los del pueblo a proposito: a un kilometro no se
+// distingue una copa de doce bultos de una de cinco, y son 15.000 arboles.
+const ESPECIES = {
+  encina: { trunkH: [2.3, 1.0], rBase: [0.34, 0.08], rMidF: 0.55, flare: 0.18,
+    lean: 0.7, ramas: 4, ramaT: [0.35, 0.5], ramaR: [1.0, 0.8], ramaSube: [0.3, 0.5],
+    crownY: 0.85, R: [2.3, 0.6], Ry: [1.5, 0.3], blobs: 12, theta: [-0.85, 1.05],
+    rFrac: [0.32, 0.5], conic: 0, col: OAK_GREEN, lados: 6 },
+  melojo: { trunkH: [3.4, 1.4], rBase: [0.30, 0.07], rMidF: 0.5, flare: 0.14,
+    lean: 1.0, ramas: 4, ramaT: [0.45, 0.45], ramaR: [1.1, 0.9], ramaSube: [0.5, 0.7],
+    crownY: 0.95, R: [2.1, 0.7], Ry: [1.8, 0.4], blobs: 11, theta: [-0.6, 1.15],
+    rFrac: [0.30, 0.48], conic: 0, col: MELOJO_GREEN, lados: 6 },
+  fresno: { trunkH: [5.0, 1.6], rBase: [0.24, 0.05], rMidF: 0.45, flare: 0.10,
+    lean: 0.4, ramas: 3, ramaT: [0.6, 0.3], ramaR: [0.8, 0.6], ramaSube: [0.7, 0.6],
+    crownY: 0.92, R: [1.7, 0.5], Ry: [2.0, 0.5], blobs: 10, theta: [-0.35, 1.2],
+    rFrac: [0.28, 0.46], conic: 0.15, col: ASH_GREEN, lados: 5 },
+  resinero: { trunkH: [6.5, 3.0], rBase: [0.22, 0.05], rMidF: 0.4, flare: 0.06,
+    lean: 0.3, ramas: 3, ramaT: [0.55, 0.3], ramaR: [0.6, 0.4], ramaSube: [0.15, 0],
+    crownY: 0.88, R: [1.5, 0.4], Ry: [1.2, 0.3], blobs: 10, theta: [-0.3, 1.2],
+    rFrac: [0.30, 0.5], conic: 0.5, col: PINE_GREEN, lados: 5 },
+  albar: { trunkH: [7.5, 3.0], rBase: [0.20, 0.04], rMidF: 0.38, flare: 0.05,
+    lean: 0.2, ramas: 3, ramaT: [0.65, 0.25], ramaR: [0.5, 0.35], ramaSube: [0.2, 0],
+    crownY: 0.90, R: [1.2, 0.3], Ry: [1.4, 0.3], blobs: 9, theta: [-0.15, 1.25],
+    rFrac: [0.28, 0.46], conic: 0.6, col: PINE_GREEN, lados: 5 },
+  enebro: { trunkH: [0.9, 0.5], rBase: [0.16, 0.05], rMidF: 0.6, flare: 0.2,
+    lean: 0.4, ramas: 2, ramaT: [0.4, 0.4], ramaR: [0.4, 0.3], ramaSube: [0.3, 0.3],
+    crownY: 1.4, R: [1.0, 0.35], Ry: [1.3, 0.35], blobs: 7, theta: [-0.5, 1.25],
+    rFrac: [0.32, 0.5], conic: 0.35, col: JUNIPER_GREEN, lados: 5 },
+  piorno: { trunkH: [0.25, 0.15], rBase: [0.10, 0.04], rMidF: 0.7, flare: 0.3,
+    lean: 0.2, ramas: 0, ramaT: [0, 0], ramaR: [0, 0], ramaSube: [0, 0],
+    crownY: 1.8, R: [0.85, 0.3], Ry: [0.5, 0.2], blobs: 6, theta: [-0.9, 0.9],
+    rFrac: [0.38, 0.6], conic: 0, col: BROOM_GREEN, lados: 4 },
+};
+
+// El mismo constructor para las siete. Antes eran dos funciones casi identicas
+// -buildEncina y buildPino- que solo se diferenciaban en los numeros; ahora los
+// numeros estan en la tabla de arriba y esto es uno solo.
+function buildArbol(esp, idx, barato = false) {
+  const e = ESPECIES[esp];
   const soup = new Soup();
-  const rng = rngFrom(idx * 9781 + 17);
+  const rng = rngFrom(idx * 9781 + 17 + esp.length * 733);
 
-  const trunkH = 2.3 + rng.randf() * 1.0;
-  const rBase = 0.34 + rng.randf() * 0.08;
-  const rFlare = rBase * 1.55;                        // ensanche de raiz
-  const rMid = rBase * 0.55;
-  const flareH = trunkH * 0.18;
-  const leanX = (rng.randf() - 0.5) * 0.7, leanZ = (rng.randf() - 0.5) * 0.7;
-  const pFlare = [leanX * 0.15, flareH, leanZ * 0.15];
+  const trunkH = e.trunkH[0] + rng.randf() * e.trunkH[1];
+  const rBase = e.rBase[0] + rng.randf() * e.rBase[1];
+  const rFlare = rBase * (1.5 + e.flare);
+  const rMid = rBase * e.rMidF;
+  const leanX = (rng.randf() - 0.5) * e.lean, leanZ = (rng.randf() - 0.5) * e.lean;
+  const pFlare = [leanX * 0.15, trunkH * e.flare, leanZ * 0.15];
   const pTop = [leanX, trunkH, leanZ];
-  addFrustum(soup, [0, 0, 0], pFlare, rFlare, rBase, 6, TRUNK_BROWN);
-  addFrustum(soup, pFlare, pTop, rBase, rMid, 6, TRUNK_BROWN);
+  addFrustum(soup, [0, 0, 0], pFlare, rFlare, rBase, e.lados, TRUNK_BROWN);
+  addFrustum(soup, pFlare, pTop, rBase, rMid, e.lados, TRUNK_BROWN);
 
-  for (let i = 0; i < 4; i++) {                       // 4 ramas, arrancan bajas
-    const t = 0.35 + rng.randf() * 0.5;
+  const nRamas = barato ? 0 : e.ramas;
+  for (let i = 0; i < nRamas; i++) {
+    const t = e.ramaT[0] + rng.randf() * e.ramaT[1];
     const start = [
       pFlare[0] + (pTop[0] - pFlare[0]) * t,
       pFlare[1] + (pTop[1] - pFlare[1]) * t,
       pFlare[2] + (pTop[2] - pFlare[2]) * t,
     ];
-    const az = TAU * i / 4 + rng.randf() * 0.6;
-    const reach = 1.0 + rng.randf() * 0.8;
-    const end = [start[0] + Math.cos(az) * reach, start[1] + 0.3 + rng.randf() * 0.5, start[2] + Math.sin(az) * reach];
+    const az = TAU * i / nRamas + rng.randf() * 0.6;
+    const reach = e.ramaR[0] + rng.randf() * e.ramaR[1];
+    const end = [start[0] + Math.cos(az) * reach,
+      start[1] + e.ramaSube[0] + rng.randf() * e.ramaSube[1],
+      start[2] + Math.sin(az) * reach];
     addFrustum(soup, start, end, rMid * 0.55, rMid * 0.12, 3, TRUNK_BROWN);
   }
 
-  const crownC = [pTop[0], trunkH * 0.85, pTop[2]];
-  const Rx = 2.3 + rng.randf() * 0.6, Rz = 2.3 + rng.randf() * 0.6, Ry = 1.5 + rng.randf() * 0.3;
-  addCanopy(soup, rng, crownC, Rx, Ry, Rz, 12, -0.85, 1.05, 0.32, 0.5, 0, OAK_GREEN);
-  return soup.geometry();
-}
-
-// Pino: tronco recto y alto, desnudo hasta el tercio superior, copa estrecha
-// y algo conica -- forma de sombrilla, nunca la bola de la encina.
-function buildPino(idx) {
-  const soup = new Soup();
-  const rng = rngFrom(idx * 3413 + 51);
-
-  const trunkH = 6.5 + rng.randf() * 3.0;
-  const rBase = 0.22 + rng.randf() * 0.05;
-  const rFlare = rBase * 1.5;
-  const rMid = rBase * 0.4;
-  const flareH = trunkH * 0.06;
-  const leanX = (rng.randf() - 0.5) * 0.3, leanZ = (rng.randf() - 0.5) * 0.3;
-  const pFlare = [leanX * 0.1, flareH, leanZ * 0.1];
-  const pTop = [leanX, trunkH, leanZ];
-  addFrustum(soup, [0, 0, 0], pFlare, rFlare, rBase, 5, TRUNK_BROWN);
-  addFrustum(soup, pFlare, pTop, rBase, rMid, 5, TRUNK_BROWN);
-
-  for (let i = 0; i < 3; i++) {                       // ramas solo en el tercio alto
-    const t = 0.55 + rng.randf() * 0.3;
-    const start = [
-      pFlare[0] + (pTop[0] - pFlare[0]) * t,
-      pFlare[1] + (pTop[1] - pFlare[1]) * t,
-      pFlare[2] + (pTop[2] - pFlare[2]) * t,
-    ];
-    const az = TAU * i / 3 + rng.randf() * 0.6;
-    const reach = 0.6 + rng.randf() * 0.4;
-    const end = [start[0] + Math.cos(az) * reach, start[1] + 0.15, start[2] + Math.sin(az) * reach];
-    addFrustum(soup, start, end, rMid * 0.5, rMid * 0.1, 3, TRUNK_BROWN);
-  }
-
-  const crownC = [pTop[0], trunkH * 0.88, pTop[2]];
-  const Rx = 1.5 + rng.randf() * 0.4, Rz = 1.5 + rng.randf() * 0.4, Ry = 1.2 + rng.randf() * 0.3;
-  addCanopy(soup, rng, crownC, Rx, Ry, Rz, 10, -0.3, 1.2, 0.30, 0.5, 0.5, PINE_GREEN);
+  const crownC = [pTop[0], trunkH * e.crownY, pTop[2]];
+  const Rx = e.R[0] + rng.randf() * e.R[1], Rz = e.R[0] + rng.randf() * e.R[1];
+  const Ry = e.Ry[0] + rng.randf() * e.Ry[1];
+  // La copa del monte lleva dos tercios de bultos. A la mitad se veian las caras
+  // del octaedro: desde abajo, una copa de cinco bultos gordos lee como cuatro
+  // cuadrados pegados, y por el monte se anda igual que por el pueblo.
+  const n = barato ? Math.max(5, Math.round(e.blobs * 0.65)) : e.blobs;
+  addCanopy(soup, rng, crownC, Rx, Ry, Rz, n, e.theta[0], e.theta[1],
+    e.rFrac[0], e.rFrac[1], e.conic, e.col);
   return soup.geometry();
 }
 
@@ -295,25 +326,35 @@ function materialArbol(uClima) {
       #include <begin_vertex>
       vANorm = normalize(mat3(modelMatrix) * normal);
     `);
-    shader.fragmentShader = 'uniform vec2 uClima;\nvarying vec3 vANorm;\n'
+    shader.fragmentShader = 'uniform vec3 uClima;\nvarying vec3 vANorm;\n'
       + shader.fragmentShader;
     // DESPUES de <color_fragment>, no en <map_fragment>: es ahi donde three
     // multiplica por el color de vertice, y una mezcla puesta antes se borra
     // sola en cuanto llega esa multiplicacion.
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
+      // Cuatro cajones sacados de un solo numero, la razon G/R del color de
+      // vertice: tronco 0.74, caduca 1.26-1.30, encina 1.48, conifera 1.63+.
       float razon = vColor.g / max(vColor.r, 1e-4);
       float esHoja = step(1.10, razon);
+      float esCaduca = esHoja * (1.0 - step(1.38, razon));
       float esPino = step(1.55, razon);
 
-      // La encina es PERENNIFOLIA: no pierde la hoja, y el pino menos. Aqui no
-      // hay otono de colores, y pintarlo seria plantar Nueva Inglaterra en
-      // Abantos. Lo que si cambia es que al final del verano seco la hoja queda
-      // polvorienta y grisacea, asi que esto es un desvio de tono corto y no una
-      // defoliacion. Al pino no le pasa ni eso.
+      // La encina es PERENNIFOLIA y el pino tambien. Lo que les pasa al final del
+      // verano seco es que la hoja queda polvorienta y grisacea: un desvio de
+      // tono corto, no una defoliacion.
       float mustia = esHoja * (1.0 - esPino) * uClima.x;
       diffuseColor.rgb = mix(diffuseColor.rgb,
           diffuseColor.rgb * vec3(1.16, 1.06, 0.84), mustia);
+
+      // Y el melojo SI se pone ocre, que es la estampa de La Herreria en
+      // noviembre y la razon de que la gente suba a verlo. Aqui decia que en esta
+      // sierra no hay otono de colores y era verdad mientras solo hubiera encinas
+      // y pinos; con el melojar plantado deja de serlo. El rebollo ademas es
+      // MARCESCENTE: se pone ocre y no suelta la hoja hasta la primavera, asi que
+      // no hay rama pelada en enero.
+      diffuseColor.rgb = mix(diffuseColor.rgb,
+          vec3(0.098, 0.062, 0.024) * (0.85 + 0.4 * razon), esCaduca * uClima.z);
 
       // Nieve en la copa, solo en lo que mira hacia arriba. Un pinar nevado es
       // LA imagen del invierno en esta sierra y cuesta estas dos lineas.
@@ -351,26 +392,44 @@ function instancedFromList(geo, list, name, mat) {
   return mesh;
 }
 
-// placements: {x,y,z,yaw,esc,pinar,tono}. El arquetipo lo decide un hash de
-// la posicion, no `tono` ni el orden de llegada: asi dos arboles vecinos casi
-// nunca comparten silueta exacta aunque el bosque entero sea determinista.
+// placements: {x,y,z,yaw,esc,esp,epoca,barato,tono}. El ejemplar lo decide un
+// hash de la posicion, no `tono` ni el orden de llegada: asi dos arboles vecinos
+// casi nunca comparten silueta exacta aunque el bosque entero sea determinista.
+//
+// Antes de esto el arquetipo lo decidia un booleano `pinar`, o sea que el mundo
+// entero era encina o pino. Ahora la especie viene decidida de fuera, en world.js,
+// por cota y por solana, que es como se reparten de verdad en esta sierra.
 export function crearArboleda(placements, uClima) {
   const mat = materialArbol(uClima);
-  const oakGeo = Array.from({ length: N_OAK }, (_, i) => buildEncina(i));
-  const pineGeo = Array.from({ length: N_PINE }, (_, i) => buildPino(i));
-  const oakList = Array.from({ length: N_OAK }, () => []);
-  const pineList = Array.from({ length: N_PINE }, () => []);
+  // Se hornea SOLO lo que se va a plantar. Las siete especies por dos calidades
+  // por cuatro ejemplares serian 56 geometrias, y en una partida normal la mitad
+  // no llega a usarse nunca.
+  const cache = new Map();
+  const geoDe = (esp, barato, k) => {
+    const clave = `${esp}${barato ? 'M' : 'P'}${k}`;
+    if (!cache.has(clave)) cache.set(clave, buildArbol(esp, k, barato));
+    return cache.get(clave);
+  };
 
+  // Un cubo por (especie, calidad, ejemplar, epoca). La epoca es lo que permite
+  // encender el melojar de 1570 o el pinar de hoy sin volver a plantar nada.
+  const cubos = new Map();
   for (const p of placements) {
-    if (p.pinar) {
-      pineList[Math.min(N_PINE - 1, (hash(p.x * 1.31, p.z * 0.77) * N_PINE) | 0)].push(p);
-    } else {
-      oakList[Math.min(N_OAK - 1, (hash(p.x * 0.91, p.z * 1.19) * N_OAK) | 0)].push(p);
-    }
+    const esp = p.esp || 'encina';
+    const k = Math.min(N_VAR - 1, (hash(p.x * 0.91 + esp.length, p.z * 1.19) * N_VAR) | 0);
+    const clave = `${esp}|${p.barato ? 1 : 0}|${k}|${p.epoca || 'comun'}`;
+    if (!cubos.has(clave)) cubos.set(clave, []);
+    cubos.get(clave).push(p);
   }
 
   const out = [];
-  oakGeo.forEach((g, i) => { if (oakList[i].length) out.push(instancedFromList(g, oakList[i], `Encina${i}`, mat)); });
-  pineGeo.forEach((g, i) => { if (pineList[i].length) out.push(instancedFromList(g, pineList[i], `Pino${i}`, mat)); });
+  for (const [clave, lista] of cubos) {
+    const [esp, barato, k, epoca] = clave.split('|');
+    const m = instancedFromList(geoDe(esp, barato === '1', +k), lista,
+      `${esp}${k}${barato === '1' ? '-monte' : ''}`, mat);
+    m.userData.epoca = epoca;
+    out.push(m);
+  }
   return out;
 }
+

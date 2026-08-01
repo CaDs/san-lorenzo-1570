@@ -192,6 +192,18 @@ for (const d of [15, 46, 350]) {
   assert.ok(m.chicharra > 0.02, 'un mediodia de julio a 30 grados sin chicharras');
 }
 
+// La obra se oye en la obra. Es lo que se le olvida a una mezcla por zonas:
+// una fuente que existe en un sitio concreto no puede sonar igual en el campo.
+for (const d of [15, 105, 196, 288]) {
+  const c = clima(3, d, 11);
+  const calle = mezclar({ dia: d, hora: 11, urbanidad: 1, fuera: 1, clima: c });
+  const campo = mezclar({ dia: d, hora: 11, urbanidad: 0, fuera: 1, clima: c });
+  assert.ok(campo.labra < 0.005 && campo.asiento < 0.005,
+    `dia ${d}: los mazos se oyen en el campo a ${campo.labra.toFixed(3)}`);
+  assert.ok(campo.fragua < 0.005, `dia ${d}: la fragua se oye en el campo`);
+  if (calle.labra > 0) assert.ok(calle.labra > campo.labra, `dia ${d}: la obra no se oye en la obra`);
+}
+
 // Los pajaros callan bajo lluvia fuerte.
 for (const d of [105, 196]) {
   const g = mezclar({ dia: d, hora: 11, urbanidad: 0.3, clima: climaFijo('tormenta', d, 11) });
