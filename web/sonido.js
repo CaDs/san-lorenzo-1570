@@ -73,7 +73,10 @@ export class Sonido {
     this.lugares = lugares;
     this.cielo = cielo;
     this.ctx = null;
-    this.on = true;
+    // Callado al entrar. Un juego que empieza sonando solo sin haberlo pedido es
+    // de las pocas cosas que molestan de verdad, y el chip de la barra lo dice y
+    // lo enciende de un clic.
+    this.on = false;
     // Estaba en 0,7 y sonaba alto. Todo cuelga de aqui: las capas continuas se
     // multiplican por este numero en cada update y los sucesos tambien, asi que
     // se baja una vez y baja entero, sin tocar el equilibrio entre capas.

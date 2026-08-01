@@ -32,18 +32,19 @@ function calcularResolucion() {
 
 let { w: W, h: H } = calcularResolucion();
 
-// Punto de aparicion: la lonja del Monasterio, mirando en diagonal a la fachada
-// de poniente. Fijo, para poder comparar capturas.
+// Punto de aparicion: la Plaza de la Constitucion. Fijo, para poder comparar
+// capturas.
 //
-// La lonja no viene nombrada en OSM, asi que el punto sale de la geometria: el
-// lado de poniente de la huella esta en x=1255, la explanada esta a nivel (1026 m,
-// pendiente 0%) y libre de edificios, que es lo que hace que sea una lonja. De
-// frente y a 24 m la fachada es un muro de granito que llena el encuadre; desde
-// este rincon del sur se lee entera, en perspectiva, con la torre de la esquina,
-// los chapiteles y el pueblo subiendo la ladera detras.
+// Esta vez el punto SI sale de OSM: la plaza es la way 26236121, setenta y cinco
+// metros de norte a sur a 1040 m de cota, libre de edificios. El centro es la
+// media de sus siete nodos. Se mira al sur, que es hacia donde baja la plaza y
+// por donde asoma el Monasterio.
 //
-// Antes se aparecia en el casco viejo, de espaldas a la razon de ser del pueblo.
-const SPAWN = { x: 1215, z: 1390, yaw: -Math.PI / 4 };
+// Antes se aparecia en la lonja, pegado a la fachada: se veia el Monasterio y
+// nada mas, y para eso ya esta el titulo. Empezar en la plaza es empezar en el
+// pueblo, con gente alrededor -es de las calles con mas paso- y con la casa
+// grande a un minuto andando.
+const SPAWN = { x: 1287, z: 1066, yaw: Math.PI };
 
 // Godot: tonemap ACES con blanco 4.0, glow intensidad 0.9 / fuerza 0.85 /
 // umbral 1.0. ponytail: estos cuatro son el mando del revelado.
