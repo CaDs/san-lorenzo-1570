@@ -74,7 +74,10 @@ export class Sonido {
     this.cielo = cielo;
     this.ctx = null;
     this.on = true;
-    this.vol = 0.7;
+    // Estaba en 0,7 y sonaba alto. Todo cuelga de aqui: las capas continuas se
+    // multiplican por este numero en cada update y los sucesos tambien, asi que
+    // se baja una vez y baja entero, sin tocar el equilibrio entre capas.
+    this.vol = 0.42;
     this.estado = 'sin arrancar';
     this.horaAntes = cielo.hour;
     this.ultima = null;              // que hora del oficio sono la ultima vez

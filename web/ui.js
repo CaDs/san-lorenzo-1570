@@ -318,8 +318,11 @@ export class Barra {
 
     const so = this.sonido;
     q('#c-sonido-ico').textContent = so.on && so.estado === 'sonando' ? '♪' : '⊘';
+    // Dice el ESTADO, no la ultima hora que sono. Poner ahi "campanas" contaba
+    // una anecdota -que lo ultimo fue visperas- en el sitio donde el jugador
+    // busca si el sonido esta puesto o no.
     q('#c-sonido .lbl').textContent = so.estado !== 'sonando' ? so.estado
-      : (so.on ? (so.ultima || 'campanas') : 'callado');
+      : (so.on ? 'sonido' : 'silencio');
     q('#c-sonido').classList.toggle('off', !so.on || so.estado !== 'sonando');
     const saber = this.misiones && this.misiones.educativo;
     const cartela = saber && this.misiones.cartela;
