@@ -122,11 +122,24 @@ def sin_choque(tags):
 # pasa. Es la buena, y por eso no se toca. Pero abre de mas en un caso concreto y
 # conocido, y para eso esta esta lista: para cerrarlo a mano en vez de debilitar
 # la regla por un caso.
+# `c` gana SIEMPRE, tanto sobre la regla geometrica como sobre la etiqueta de
+# OSM. Antes solo callaba a la primera, y por eso una via con tunnel=yes seguia
+# abriendo el muro aunque estuviera en esta lista.
 CERRADOS = {
     # Vial de servicio que MUERE dentro de una nave industrial: sus dos extremos
     # no enlazan con otras vias, asi que no lleva a ninguna parte. Un almacen no
     # es una calle, y poder entrar en el no arregla ningun recorrido.
     206563461,
+    # La PUERTA PRINCIPAL del Monasterio, con tunnel=building_passage. Y OSM
+    # tiene razon: es un paso de verdad por debajo de un edificio, con su nodo de
+    # entrada etiquetado como tal, y son dieciseis metros de arco a traves de un
+    # muro de varios metros de grueso.
+    #
+    # Se cierra porque el Monasterio NO TIENE INTERIOR en este juego. Abrir esa
+    # puerta no lleva a un patio ni a un zaguan: lleva al vacio de dentro de la
+    # caja, y desde la lonja se veia un agujero negro en mitad de la fachada. El
+    # dia que haya interior, esta linea se borra y la puerta vuelve sola.
+    889493543,
 }
 
 # Y lo contrario: vias que SI son paso aunque no lo diga ni la etiqueta ni la
@@ -348,6 +361,11 @@ for el in rd["elements"]:
                  or tags.get("covered") == "yes"
                  or tags.get("bridge") == "yes"
                  or el.get("id") in PASOS_A_MANO) else 0
+    # Y lo cerrado a mano no se abre por nada. Sin esta linea `c` solo callaba a
+    # la regla geometrica y la etiqueta de OSM seguia mandando: la puerta del
+    # Monasterio estaba en CERRADOS y se abria igual.
+    if el.get("id") in CERRADOS:
+        paso = 0
     kind = tags.get("highway", "service")
     w = ROAD_W.get(kind, 4.0)
     if "width" in tags:

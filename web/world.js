@@ -677,11 +677,19 @@ export class World extends THREE.Group {
           if (dentro && ini < 0) ini = k;
           if ((!dentro || k === n) && ini >= 0) {
             const t0 = ini / n, t1 = (dentro ? k : k - 1) / n;
-            this.pasos.push({
-              x1: x1 + (x2 - x1) * t0, z1: z1 + (z2 - z1) * t0,
-              x2: x1 + (x2 - x1) * t1, z2: z1 + (z2 - z1) * t1, semi,
-            });
-            tramos++;
+            // Un solo sondeo dentro NO es un paso: es una calle que TOCA el muro,
+            // normalmente porque su nodo final es la puerta del edificio y ese
+            // nodo cae unos centimetros del lado de dentro. La regla abria ahi un
+            // hueco de cuatro metros, y asi es como la fachada del Monasterio
+            // acabo con la puerta principal abierta a un interior que no existe.
+            // Un paso de verdad atraviesa: deja rastro a lo largo del eje.
+            if ((t1 - t0) * L >= LARGO_PASO) {
+              this.pasos.push({
+                x1: x1 + (x2 - x1) * t0, z1: z1 + (z2 - z1) * t0,
+                x2: x1 + (x2 - x1) * t1, z2: z1 + (z2 - z1) * t1, semi,
+              });
+              tramos++;
+            }
             ini = -1;
           }
         }
@@ -1968,6 +1976,10 @@ function tiltX(b, ang) {
 // Acepta el anillo en cualquier sentido de giro: normaliza dentro.
 // Alto libre de un soportal y grosor minimo del dintel que queda encima.
 const ALTO_PASO = 3.6;
+// Lo que tiene que recorrer un eje POR DENTRO de una huella para que cuente como
+// paso y no como una calle que muere contra la pared. Con el sondeo cada 2 m,
+// esto pide dos muestras seguidas dentro.
+const LARGO_PASO = 1.5;
 const DINTEL_MIN = 0.7;
 
 // `abrir(x, z)` es opcional y devuelve NULL o la cota del dintel. Donde da una
