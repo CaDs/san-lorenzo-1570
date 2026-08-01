@@ -251,8 +251,12 @@ export class DayNight {
 
     const toSun = this.directionToSun();
     const s = toSun.y;                        // seno de la elevacion solar
-    const dia = smoothstep(-0.05, 0.16, s);
-    const noche = smoothstep(0.10, -0.10, s);
+    // De dia y de noche, y guardados: el sonido los quiere para no repetir la
+    // misma cuenta astronomica, y son exactamente los mismos numeros con los que
+    // se enciende el sol y se apagan las estrellas. Dos sistemas con dos ideas
+    // distintas de cuando anochece es el fallo que se ve -o se oye- al ocaso.
+    const dia = this.dia = smoothstep(-0.05, 0.16, s);
+    const noche = this.noche = smoothstep(0.10, -0.10, s);
     // Pico en el horizonte, tanto al alba como al ocaso. Se apaga con las nubes:
     // sin esto un ocaso de lluvia sale igual de naranja que uno raso, que seria
     // lo mas raro de ver de todo esto. El sol no tine el horizonte a traves de un

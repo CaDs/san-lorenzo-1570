@@ -1113,6 +1113,10 @@ export class Vida {
   update(dt, t, camPos) {
     this._t = t;
     let nV = 0, nD = 0, nS = 0, nC = 0, nB = 0, nT = 0, nW = 0;
+    // La res mas cercana, para colgar de ella el panner del ganado: una vaca a
+    // 40 m se oye desde el campo y no desde Floridablanca.
+    let mejorGanado = Infinity;
+    this.ganadoCerca = null;
 
     for (const w of this.villagers) {
       const dx = w.pos.x - camPos.x, dz = w.pos.z - camPos.z, dy = w.pos.y - camPos.y;
@@ -1143,6 +1147,8 @@ export class Vida {
       this.stepWander(s, dt, 6, 5);
       this.writeSheep(s);
       nS++;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < mejorGanado) { mejorGanado = d2; this.ganadoCerca = s.pos; }
     }
     for (const c of this.cats) {
       const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, dy = c.pos.y - camPos.y;
@@ -1160,6 +1166,8 @@ export class Vida {
       this.stepWander(c, dt, 11, 9);
       this.writeCow(c);
       nW++;
+      const d2v = dx * dx + dz * dz;
+      if (d2v < mejorGanado) { mejorGanado = d2v; this.ganadoCerca = c.pos; }
     }
     for (const c of this.chickens) {
       const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, dy = c.pos.y - camPos.y;
@@ -1214,6 +1222,12 @@ export class Vida {
       nV++; nD++;
     }
     this.vGorguera.instanceMatrix.needsUpdate = true;
+
+    // Lo que el sonido necesita saber del mundo vivo. No son los totales del
+    // pueblo: son los que han pasado el filtro de RANGE2, o sea los que estan lo
+    // bastante cerca como para oirse. La cuenta ya estaba hecha para saber que
+    // grupos hay que repintar; solo faltaba dejarla a mano.
+    this.cerca = { vecinos: nV, perros: nD, ovejas: nS, gallinas: nC, gatos: nT, vacas: nW };
 
     if (nV) marcar(this._grupos.Vecino);
     if (nD) marcar(this._grupos.Perro);

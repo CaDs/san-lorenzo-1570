@@ -1,6 +1,6 @@
 PORT ?= 8000
 
-.PHONY: dev test tramas clima data
+.PHONY: dev test tramas clima sonido data
 
 # El juego no se compila: son ficheros sueltos que sirve cualquier servidor
 # estatico. Se sirve la raiz porque web/ lee ../data/build/.
@@ -25,6 +25,15 @@ tramas:
 # hay dentro deja de ser San Lorenzo y pasa a ser un clima de videojuego.
 clima:
 	@node web/clima.test.mjs
+
+# El mezclador de sonido tampoco necesita navegador, y es donde mas falta hace:
+# una capa de audio no se revisa mirando una captura. Comprueba que ninguna
+# ganancia sale NaN -que envenena el AudioParam para siempre y calla esa capa sin
+# un error en consola-, que nada da escalones al mover la hora o al cruzar del
+# campo a la calle, que la mezcla no satura, y que la campana toca las ocho horas
+# del oficio, ni una mas.
+sonido:
+	@node web/ambiente.test.mjs
 
 # Regenera data/build/ desde data/raw/. Necesita GDAL y, si data/raw/ no esta,
 # conexion para descargarlo. Los datos generados ya vienen en el repositorio:

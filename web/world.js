@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { crearArboleda } from './trees.js';
 import { Precipitacion } from './lluvia.js';
 import { Humo } from './humo.js';
+import { muestrear } from './ambiente.js';
 
 // Construye el terreno y los edificios de San Lorenzo desde data/build/.
 // Sistema de coordenadas:
@@ -559,6 +560,7 @@ export class World extends THREE.Group {
     // de arbol, que llevan el color cocido dentro.
     this.uClima = { value: new THREE.Vector2(0, 0) };
     this.lampPos = [];
+    this.antorchaCerca = null;
     this.pool = [];
     this.nextPoolUpdate = 0;
     this.chimeneas = [];       // remates de chimenea, los llena gableRoof() al vuelo
@@ -838,6 +840,9 @@ export class World extends THREE.Group {
       if (d < LIGHT_RADIUS * LIGHT_RADIUS) cerca.push([d, i]);
     }
     cerca.sort((a, b) => a[0] - b[0]);
+    // La mas cercana, para el chisporroteo. Un solo panner, no cuarenta: se oye a
+    // ocho metros, asi que treinta y nueve estarian siempre por debajo del umbral.
+    this.antorchaCerca = cerca.length ? this.lampPos[cerca[0][1]] : null;
 
     for (let k = 0; k < this.pool.length; k++) {
       const l = this.pool[k];
@@ -1180,6 +1185,54 @@ export class World extends THREE.Group {
         this.occR.add(key((p[0] / OCC_CELL) | 0, (p[1] / OCC_CELL) | 0));
       }
     }
+    this.buildUrbanidad();
+  }
+
+  // Cuanto pueblo hay alrededor, de 0 en la dehesa a 1 en Floridablanca. Lo usa
+  // el sonido: en el campo manda el viento y en la calle el bullicio.
+  //
+  // Se precalcula entera al cargar y no se consulta al vuelo. Las dos decisiones
+  // que la hacen servir:
+  //
+  //   - Casa 1,0 y calle 0,6. Una calle sin casas a los lados es menos pueblo que
+  //     una con ellas, y el camino de la dehesa no puede sonar a plaza.
+  //   - Desenfoque de caja de 5x5 celdas, separable: dos pasadas de 1D en vez de
+  //     una de 25 muestras. Eso convierte la rejilla de "aqui hay una casa" en
+  //     "cuanto pueblo hay en 50 m a la redonda", que es lo que se oye.
+  buildUrbanidad() {
+    const w = this.urbW = Math.ceil(this.data.size_m[0] / OCC_CELL);
+    const h = this.urbH = Math.ceil(this.data.size_m[1] / OCC_CELL);
+    let a = new Float32Array(w * h);
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const k = i * 100000 + j;
+        a[j * w + i] = this.occB.has(k) ? 1.0 : (this.occR.has(k) ? 0.6 : 0);
+      }
+    }
+    const R = 2;                                     // 5x5: 25 m de radio efectivo
+    const paso = (src, dst, ancho, alto, horizontal) => {
+      for (let j = 0; j < alto; j++) {
+        for (let i = 0; i < ancho; i++) {
+          let sum = 0;
+          for (let d = -R; d <= R; d++) {
+            // El borde repite la ultima celda en vez de contar cero: si no, el
+            // pueblo se apaga solo al acercarse al limite del mapa.
+            const q = Math.min(Math.max((horizontal ? i : j) + d, 0),
+              (horizontal ? ancho : alto) - 1);
+            sum += horizontal ? src[j * ancho + q] : src[q * ancho + i];
+          }
+          dst[j * ancho + i] = sum / (2 * R + 1);
+        }
+      }
+    };
+    const b = new Float32Array(w * h);
+    paso(a, b, w, h, true);
+    paso(b, a, w, h, false);
+    this.urb = a;
+  }
+
+  urbanidad(x, z) {
+    return muestrear(this.urb, this.urbW, this.urbH, OCC_CELL, x, z);
   }
 
   // Libre de casas Y de calles en la celda y las ocho vecinas.
