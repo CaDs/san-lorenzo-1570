@@ -21,12 +21,15 @@ def load_bbox():
         m = re.match(r"export X0=(\d+) X1=(\d+) Y0=(\d+) Y1=(\d+)", line)
         if m:
             g.update(zip(("X0", "X1", "Y0", "Y1"), map(int, m.groups())))
+    m = re.search(r"export SX0=(\d+) SX1=(\d+) SY0=(\d+) SY1=(\d+)", src)
+    g.update(zip(("SX0", "SX1", "SY0", "SY1"), map(int, m.groups())))
     m = re.search(r"export LAT0=([-\d.]+) LON0=([-\d.]+) LAT1=([-\d.]+) LON1=([-\d.]+)", src)
     g.update(zip(("LAT0", "LON0", "LAT1", "LON1"), map(float, m.groups())))
     return g
 
 B = load_bbox()
 X0, X1, Y0, Y1 = B["X0"], B["X1"], B["Y0"], B["Y1"]
+SX0, SX1, SY0, SY1 = B["SX0"], B["SX1"], B["SY0"], B["SY1"]
 
 def sh(cmd, **kw):
     r = subprocess.run(cmd, text=True, capture_output=True, **kw)
@@ -275,6 +278,34 @@ for junk in ("terrain.hdr", "terrain.bil.aux.xml", "terrain.prj", "terrain.stx")
         os.remove(f"{BUILD}/{junk}")
 assert os.path.getsize(f"{BUILD}/terrain.bin") == dem_w * dem_h * 4
 
+# ---------------------------------------------------------------- la sierra
+# El mismo tratamiento para el relieve de alrededor, a 25 m en vez de 5. Solo
+# cota: ni casas ni calles, que a dos kilometros no se ven y a cambio
+# multiplicarian por diez lo que hay que cargar.
+#
+# El origen se da ya en coordenadas del mundo -X hacia el este desde la esquina
+# SO del casco, Z hacia el sur desde su borde norte- y sale negativo por los dos
+# lados, que es justo lo que se busca: la sierra empieza 5,5 km al oeste y 5 km
+# al norte del recorte del pueblo.
+print("4b/5 generando la sierra ...", flush=True)
+si = json.loads(sh(["gdalinfo", "-json", "-stats", f"{RAW}/dem_sierra.tif"]))
+sband = si["bands"][0]
+smin, smax = float(sband["minimum"]), float(sband["maximum"])
+sw, shh = si["size"]
+sh(["gdal_translate", "-q", "-ot", "Float32", "-of", "EHdr",
+    f"{RAW}/dem_sierra.tif", f"{BUILD}/sierra.bil"])
+os.replace(f"{BUILD}/sierra.bil", f"{BUILD}/sierra.bin")
+for junk in ("sierra.hdr", "sierra.bil.aux.xml", "sierra.prj", "sierra.stx"):
+    if os.path.exists(f"{BUILD}/{junk}"):
+        os.remove(f"{BUILD}/{junk}")
+assert os.path.getsize(f"{BUILD}/sierra.bin") == sw * shh * 4
+res_s = (SX1 - SX0) // sw
+# El recorte del pueblo tiene que caer en una linea de la rejilla de la sierra,
+# o el hueco que se le abre deja un diente de sierra de hasta 25 m por el que se
+# ve el cielo desde dentro del pueblo.
+for v in (X0 - SX0, X1 - SX0, SY1 - Y1, SY1 - Y0):   # margenes N y S incluidos
+    assert v % res_s == 0, f"el Ring A no cuadra con la rejilla de la sierra: {v} % {res_s}"
+
 # ------------------------------------------------------------------ viario
 # Los ejes salen sin cota: el juego los posa sobre el terreno al cargar, asi
 # que no hay que muestrear el DEM aqui.
@@ -432,6 +463,8 @@ world = {
     "size_m": [X1 - X0, Y1 - Y0],
     "lat": round((B["LAT0"] + B["LAT1"]) / 2, 4),   # para la posicion del sol
     "dem": {"file": "terrain.bin", "w": dem_w, "h": dem_h, "min": hmin, "max": hmax},
+    "sierra": {"file": "sierra.bin", "w": sw, "h": shh, "res": res_s,
+               "x0": SX0 - X0, "z0": Y1 - SY1, "min": smin, "max": smax},
     "buildings": out,
     "roads": roads,
 }
@@ -440,4 +473,5 @@ for f in (tmp4326, tmp25830, tmpr4326, tmpr25830):
     os.remove(f)
 
 print(f"\nOK  {len(out)} edificios | {len(roads)} tramos de calle | "
-      f"terreno {dem_w}x{dem_h} ({X1-X0}x{Y1-Y0} m) | cota {hmin:.0f}-{hmax:.0f} m")
+      f"terreno {dem_w}x{dem_h} ({X1-X0}x{Y1-Y0} m) | cota {hmin:.0f}-{hmax:.0f} m\n"
+      f"    sierra {sw}x{shh} a {res_s} m ({SX1-SX0}x{SY1-SY0} m) | cota {smin:.0f}-{smax:.0f} m")

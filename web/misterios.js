@@ -119,6 +119,15 @@ export const MISTERIOS = [
       + 'pone al levantar una casa para que no falte el pan dentro. Sacarla trae '
       + 'lo contrario, asi que ahi sigue y ahi seguira.',
   },
+  {
+    id: 'pedrin', tipo: 'objeto', nombre: 'La cruz del camino de Abantos',
+    pista: 'Monte arriba, donde la senda se parte, hay un majano con algo clavado.',
+    texto: 'Dos maderos atados, clavados en un majano de piedras, donde el '
+      + 'camino de la cumbre se parte en dos. Los que suben a por leña le echan '
+      + 'una piedra al pasar. Dicen que se puso por un niño que subio detras del '
+      + 'ganado y al que se le echo la noche encima, y que quien no le deje su '
+      + 'piedra oye llamar a alguien cuando ya no hay nadie.',
+  },
   // --- personas ------------------------------------------------------------
   {
     id: 'aullido', tipo: 'persona', oficio: 'pastora',
@@ -218,6 +227,27 @@ export const MISTERIOS = [
   },
 ];
 
+// --- los que tienen un sitio y no se mueven de el -----------------------------
+//
+// Un misterio anclado a un sitio con nombre CUALQUIERA es lo que ponia la Silla
+// de Felipe II en la lonja del Monasterio, y eso no tiene arreglo por mucho que
+// el texto sea bueno: la Silla es un pedrusco concreto en un cerro concreto, a
+// dos kilometros largos al sur, y ponerla en la lonja es lo mismo que poner el
+// Monasterio en la dehesa.
+//
+// Las coordenadas salen de OSM y estan pasadas a EPSG:25830 y de ahi al mundo
+// (x = Este - 401500, z = 4495100 - Norte). Las dos caen FUERA del recorte del
+// casco, que es justo el motivo de que hubiera que traer la sierra: sin ella no
+// habia suelo donde ponerlas.
+const ANCLAS = {
+  // node/285895835 - 40,56854 N, 4,15254 O. 1,5 km al sur del borde del pueblo.
+  silla: { x: 939, z: 3599, sitio: 'la Silla de Felipe II' },
+  // node/6286271279 - 40,60047 N, 4,15807 O, en la ladera de Abantos. La cruz
+  // que hay hoy es de hace un siglo largo, no de 1570; lo que se pone aqui es el
+  // cruce de caminos donde esta, que si es de siempre, y la costumbre del majano.
+  pedrin: { x: 518, z: 49, sitio: 'el camino de Abantos' },
+};
+
 // --- reparto ---------------------------------------------------------------
 
 const RADIO = 26;    // m alrededor del sitio con nombre donde puede caer
@@ -273,6 +303,13 @@ export function repartir(semilla, lugares, vida) {
       // encuentra hablandole, no acercandose, y ademas anda por el pueblo, asi
       // que la posicion de ahora no vale para nada dentro de dos minutos.
       out.push({ ...m, npcId: f.id });
+      return;
+    }
+
+    // Los que tienen sitio de verdad no entran en el sorteo.
+    const fijo = ANCLAS[m.id];
+    if (fijo) {
+      out.push({ ...m, sitio: fijo.sitio, x: fijo.x, z: fijo.z });
       return;
     }
 

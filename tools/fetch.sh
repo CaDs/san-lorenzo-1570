@@ -20,6 +20,10 @@ echo "Ring A: ${X0}-${X1} E, ${Y0}-${Y1} N (EPSG:25830)"
 fetch "DEM ${DEM_W}x${DEM_H} @${DEM_RES}m" data/raw/dem.tif \
   "https://servicios.idee.es/wcs-inspire/mdt?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Elevacion25830_5&subset=x($X0,$X1)&subset=y($Y0,$Y1)&format=image/tiff"
 
+SW=$(( (SX1-SX0)/SIERRA_RES ));  SH=$(( (SY1-SY0)/SIERRA_RES ))
+fetch "Sierra ${SW}x${SH} @${SIERRA_RES}m" data/raw/dem_sierra.tif \
+  "https://servicios.idee.es/wcs-inspire/mdt?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Elevacion25830_25&subset=x($SX0,$SX1)&subset=y($SY0,$SY1)&format=image/tiff"
+
 overpass() { # nombre destino consulta
   if [ -s "$2" ]; then echo "  = $1 (cache)"; return; fi
   echo -n "  > $1 ... "

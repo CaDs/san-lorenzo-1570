@@ -70,7 +70,12 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 // fov vertical 68 y far 3000. Con el lienzo ya
 // no atado a 16:9, el fov vertical se mantiene y el horizontal lo da la ventana.
-const camera = new THREE.PerspectiveCamera(68, W / H, 0.05, 3000);
+// El plano lejano llega a 12 km porque ahora hay sierra que ver: Abantos esta a
+// 1,7 km y la Machota a 4. El cercano sube de 0,05 a 0,2 m para no perder
+// precision de profundidad al estirar el otro -lo que manda es la razon entre
+// los dos, y asi se queda como estaba-; a 20 cm de la cara no hay nada, que el
+// jugador choca contra las fachadas mucho antes.
+const camera = new THREE.PerspectiveCamera(68, W / H, 0.2, 12000);
 
 const world = await World.load();
 scene.add(world);

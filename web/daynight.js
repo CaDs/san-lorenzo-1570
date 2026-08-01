@@ -329,7 +329,20 @@ export class DayNight {
     // La niebla de estancamiento de esta sierra no es bruma: son 59 dias al ano
     // y con el multiplicador de 9 el Monasterio desaparece a unos 150 m, que es
     // lo que hace en noviembre visto desde la carretera de la estacion.
-    this.fog.density = (0.0013 + (0.00075 - 0.0013) * dia) * c.niebla;
+    // Dos regimenes que antes eran uno solo, y por eso no se podian tener los
+    // dos: aire limpio y niebla de estancamiento.
+    //
+    // Con el pueblo solo, a 3,6 km de lado, nunca se miraba mas alla de kilometro
+    // y medio, asi que 0,0013 con aire limpio no molestaba. Con la sierra puesta
+    // esa densidad borra Abantos ENTERO: a 1,7 km deja pasar el 0,8% de la luz.
+    // Un dia raso de sierra se ve la cumbre, y ahora se ve.
+    //
+    // Pero el multiplicador de niebla iba lineal, y bajando la base a la quinta
+    // parte los 59 dias de niebla del ano se quedaban en bruma de nada. Va al
+    // cuadrado largo: con niebla 9 el Monasterio vuelve a desaparecer a unos
+    // 150 m -que es lo que hace en noviembre desde la carretera de la estacion- y
+    // con 1 el aire esta limpio. Entre medias, la lluvia deja ver 700 m.
+    this.fog.density = (0.00040 + (0.00022 - 0.00040) * dia) * Math.pow(c.niebla, 1.75);
 
     // Se encienden un poco antes de que anochezca del todo, como en la vida.
     this.world.setNight(smoothstep(0.16, -0.02, s));

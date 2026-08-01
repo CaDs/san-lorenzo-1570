@@ -219,7 +219,7 @@ export class Barra {
     };
   }
 
-  // Los 25. Los encontrados con su nombre y su texto; los que faltan, como
+  // Todos ellos. Los encontrados con su nombre y su texto; los que faltan, como
   // renglon en blanco con la pista, que es lo que hace que la lista pique en vez
   // de ser un marcador. Nada de senalarlos en el minimapa: entonces no son
   // misterios, son recados con chincheta.

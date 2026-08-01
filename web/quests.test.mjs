@@ -257,12 +257,17 @@ for (const p of sinClima) {
 // --- los 25 misterios ---------------------------------------------------------
 //
 // Se reparten por semilla, asi que lo que hay que comprobar es que se reparten
-// TODOS -uno que no se coloque no lo encuentra nadie y la lista nunca llega a 25-,
+// TODOS -uno que no se coloque no lo encuentra nadie y la lista nunca se llena-,
 // que dos no caen en el mismo sitio y que cada uno trae su pista y su texto.
+//
+// Y los que tienen un sitio de verdad -la Silla de Felipe II, la cruz del camino
+// de Abantos- tienen que caer SIEMPRE ahi. Eso es lo que este aserto no miraba, y
+// por eso la Silla amanecia en la lonja del Monasterio con cualquier semilla.
 
 const { MISTERIOS, repartir } = await import('./misterios.js');
 
-assert.strictEqual(MISTERIOS.length, 25, `hay ${MISTERIOS.length} misterios, no 25`);
+const TOTAL = MISTERIOS.length;
+assert.ok(TOTAL >= 25, `hay ${TOTAL} misterios, y no pueden ser menos de 25`);
 for (const m of MISTERIOS) {
   assert.ok(m.id && m.nombre && m.pista && m.texto, `misterio incompleto: ${m.id}`);
   assert.ok(m.tipo === 'objeto' || m.tipo === 'persona', `tipo raro: ${m.tipo}`);
@@ -280,8 +285,14 @@ for (const m of MISTERIOS) {
 let sitiosMax = 0;
 for (let semilla = 1; semilla <= 200; semilla++) {
   const puestos = repartir(semilla, lugares, vida);
-  assert.strictEqual(puestos.length, 25,
-    `semilla ${semilla}: solo se colocan ${puestos.length} de 25`);
+  assert.strictEqual(puestos.length, TOTAL,
+    `semilla ${semilla}: solo se colocan ${puestos.length} de ${TOTAL}`);
+  // Los anclados, clavados: mismo sitio con las 200 semillas.
+  for (const [id, xy] of [['silla', [939, 3599]], ['pedrin', [518, 49]]]) {
+    const m = puestos.find((p) => p.id === id);
+    assert.ok(m && m.x === xy[0] && m.z === xy[1],
+      `semilla ${semilla}: ${id} se ha ido a ${m && [m.x, m.z]}`);
+  }
   const objetos = puestos.filter((m) => m.tipo === 'objeto');
   const sitios = new Set(objetos.map((m) => m.sitio));
   assert.strictEqual(sitios.size, objetos.length,
@@ -308,5 +319,5 @@ console.log(`OK: ${total} llegadas repartidas entre ${LLEGADA.length} frases,`
   + ` ${[...cuenta.values()].sort((a, b) => a - b).join('/')}`);
 console.log(`OK: ${combinaciones} combinaciones de epoca y tiempo x 25 semillas,`
   + ` ninguna deja sin encargo | ${vistos.size} motivos distintos`);
-console.log(`OK: 25 misterios repartidos en 200 semillas, hasta ${sitiosMax} sitios`
+console.log(`OK: ${TOTAL} misterios repartidos en 200 semillas, hasta ${sitiosMax} sitios`
   + ' distintos, ninguna pista se delata sola');

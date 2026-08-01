@@ -419,11 +419,18 @@ function terrainMaterial(roca = 1.0, uClima) {
           diffuseColor.rgb * vec3(1.45, 1.20, 0.62), uClima.x);
 
       // La nieve cuaja por COTA, no en todo a la vez. La linea baja segun cuanta
-      // hay: con poca solo se blanquean las cumbres -el terreno va de 881 a
-      // 1334 m- y el pueblo, a 1030, sigue pardo, que es lo que pasa la mayoria
-      // de las veces que nieva aqui. Y no cuaja en lo vertical.
+      // hay: con poca solo se blanquean las cumbres y el pueblo, a 1030, sigue
+      // pardo, que es lo que pasa la mayoria de las veces que nieva aqui. Y no
+      // cuaja en lo vertical.
+      //
+      // El primer factor -"que HAYA nieve"- faltaba, y no se veia: sin nieve la
+      // linea se queda en 1350 m y el terreno del pueblo llega a 1334, asi que
+      // nunca daba. Al meter la sierra, que sube a 1756, Abantos amanecio nevado
+      // un 15 de julio. El fallo llevaba ahi desde el primer dia, esperando a que
+      // el mundo tuviera una cumbre.
       float linea = 1350.0 - uClima.y * 500.0;
-      float cuaja = smoothstep(linea, linea + 120.0, vTPos.y)
+      float cuaja = smoothstep(0.0, 0.10, uClima.y)
+                  * smoothstep(linea, linea + 120.0, vTPos.y)
                   * smoothstep(0.35, 0.75, vTNorm.y);
       diffuseColor.rgb = mix(diffuseColor.rgb,
           vec3(0.52, 0.55, 0.60) * (0.90 + 0.20 * nFine), cuaja);
@@ -532,14 +539,20 @@ function flameMaterial() {
 
 export class World extends THREE.Group {
   static async load() {
-    const [data, dem] = await Promise.all([
-      fetch(DATA + 'world.json').then((r) => r.json()),
+    const data = await fetch(DATA + 'world.json').then((r) => r.json());
+    const [dem, sier] = await Promise.all([
       fetch(DATA + 'terrain.bin').then((r) => r.arrayBuffer()),
+      // La sierra es opcional a proposito: sin ella el pueblo sigue siendo el
+      // pueblo, solo que rodeado de nada. Un fichero de 1 MB que no cargue no
+      // puede dejar el juego en negro.
+      data.sierra
+        ? fetch(DATA + data.sierra.file).then((r) => r.arrayBuffer()).catch(() => null)
+        : null,
     ]);
-    return new World(data, new Float32Array(dem));
+    return new World(data, new Float32Array(dem), sier && new Float32Array(sier));
   }
 
-  constructor(data, heights) {
+  constructor(data, heights, sierra) {
     super();
     const t0 = performance.now();
     this.data = data;
@@ -547,6 +560,12 @@ export class World extends THREE.Group {
     this.demW = data.dem.w;
     this.demH = data.dem.h;
     this.resM = data.size_m[0] / this.demW;
+    // El relieve de alrededor: 14 x 12 km a 25 m, solo cota. Es lo que pone
+    // Abantos donde se ve desde media sierra y lo que hace que el pueblo deje de
+    // acabarse en una mesa lisa a 3,6 km.
+    this.sierra = sierra && data.sierra
+      && sierra.length === data.sierra.w * data.sierra.h ? sierra : null;
+    this.sInfo = this.sierra ? data.sierra : null;
     if (heights.length !== this.demW * this.demH) {
       throw new Error('el heightmap no cuadra con dem.w/h');
     }
@@ -570,6 +589,7 @@ export class World extends THREE.Group {
     this.occR = new Set();
 
     this.add(this.terrainNode());
+    if (this.sierra) this.add(this.sierraNode());
     // Antes de levantar los muros: buildingNodes() necesita saber por donde
     // pasa una calle para abrirle el soportal en vez de tapiarlo.
     this.buildFachadas();
@@ -592,7 +612,7 @@ export class World extends THREE.Group {
     // antorcha pediria su mapa de sombra cubico y el shader se pasa de
     // samplers: MAX_TEXTURE_IMAGE_UNITS(16) y no compila nada.
     for (const o of this.children) {
-      if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      if (o.isMesh && !o.userData.sinSombra) { o.castShadow = true; o.receiveShadow = true; }
     }
     this.flames.castShadow = false;   // el shader de la llama no escribe profundidad util
     this.humo.objeto.castShadow = false;
@@ -866,7 +886,42 @@ export class World extends THREE.Group {
   // no de forma bilineal: asi las calles y las farolas se posan exactamente en
   // la superficie visible. Con una bilineal el error llega a medio metro en
   // cuesta y las calles se entierran.
+  // Cuanto se mete un punto dentro del recorte del casco. Negativo fuera.
+  dentroDelCasco(x, z) {
+    const [sx, sz] = this.data.size_m;
+    return Math.min(x, sx - x, z, sz - z);
+  }
+
+  // La cota de la sierra, bilineal. Fuera de sus 14 x 12 km se repite el borde,
+  // que es lo mismo que hace el heightmap fino y evita un acantilado al infinito.
+  alturaSierra(x, z) {
+    const s = this.sInfo;
+    const fx = Math.min(Math.max((x - s.x0) / s.res - 0.5, 0), s.w - 1.001);
+    const fz = Math.min(Math.max((z - s.z0) / s.res - 0.5, 0), s.h - 1.001);
+    const i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j;
+    const a = this.sierra[j * s.w + i], b = this.sierra[j * s.w + i + 1];
+    const c = this.sierra[(j + 1) * s.w + i], d = this.sierra[(j + 1) * s.w + i + 1];
+    return (a + (b - a) * tx) * (1 - tz) + (c + (d - c) * tx) * tz;
+  }
+
   heightAt(x, z) {
+    // Fuera del casco manda la sierra, y en los 60 m de dentro del borde se
+    // funden las dos. Sin la banda hay un escalon de un par de metros justo en
+    // el limite -mismo terreno, muestreado a 5 m y a 25- y eso, andando, es un
+    // bordillo invisible por el que se tropieza.
+    if (this.sierra) {
+      const d = this.dentroDelCasco(x, z);
+      if (d < 60) {
+        const gruesa = this.alturaSierra(x, z);
+        if (d <= 0) return gruesa;
+        const t = d / 60, f = t * t * (3 - 2 * t);
+        return gruesa + (this.finaAt(x, z) - gruesa) * f;
+      }
+    }
+    return this.finaAt(x, z);
+  }
+
+  finaAt(x, z) {
     const { heights, demW, demH, resM } = this;
     const fx = Math.min(Math.max(x / resM - 0.5, 0), demW - 1.001);
     const fz = Math.min(Math.max(z / resM - 0.5, 0), demH - 1.001);
@@ -945,6 +1000,87 @@ export class World extends THREE.Group {
 
     const mesh = new THREE.Mesh(g, terrainMaterial(1.0, this.uClima));
     mesh.name = 'Terreno';
+    return mesh;
+  }
+
+  // La sierra de alrededor: 564 x 484 muestras a 25 m, con el casco recortado.
+  //
+  // El recorte del hueco cuadra SIN resto porque los cuatro bordes del Ring A
+  // caen justo encima de una linea de la rejilla de 25 m (eso lo comprueba
+  // prep.py con un assert). Si no cuadrase, quedaria un diente de sierra de
+  // hasta 25 m por el que se veria el cielo desde dentro del pueblo.
+  //
+  // Los vertices que caen DENTRO del casco no se tiran: se bajan un par de
+  // metros y se les da la cota fina. Eso hace dos cosas de una: el anillo de
+  // cuadros que cruza el borde queda escondido debajo del terreno bueno en vez
+  // de pelearse con el por el z-buffer, y de paso tapa la franja de 2,5 m que el
+  // terreno fino nunca llego a cubrir -sus muestras van al centro del pixel, o
+  // sea que empieza en 2,5 y no en 0- y por la que hasta ahora se veia el vacio.
+  sierraNode() {
+    const s = this.sInfo, H = this.sierra;
+    const n = s.w * s.h;
+    const verts = new Float32Array(n * 3);
+    const norms = new Float32Array(n * 3);
+    const cols = new Float32Array(n * 3);
+    const OCULTO = 30;              // m dentro del casco a partir de los cuales no se dibuja
+
+    for (let j = 0; j < s.h; j++) {
+      for (let i = 0; i < s.w; i++) {
+        const k = j * s.w + i;
+        const x = s.x0 + (i + 0.5) * s.res;
+        const z = s.z0 + (j + 0.5) * s.res;
+        const dentro = this.dentroDelCasco(x, z);
+        let y = H[k];
+        if (dentro > 0) {
+          // Cota fina menos un hundimiento que crece deprisa: a 3 m del borde ya
+          // esta 2,4 m por debajo, o sea fuera de la vista y sin z-fighting.
+          y = this.finaAt(x, z) - Math.min(dentro, 3) * 0.8;
+        }
+        verts[k * 3] = x; verts[k * 3 + 1] = y; verts[k * 3 + 2] = z;
+
+        const i0 = Math.max(i - 1, 0), i1 = Math.min(i + 1, s.w - 1);
+        const j0 = Math.max(j - 1, 0), j1 = Math.min(j + 1, s.h - 1);
+        const dhdx = (H[j * s.w + i1] - H[j * s.w + i0]) / ((i1 - i0) * s.res);
+        const dhdz = (H[j1 * s.w + i] - H[j0 * s.w + i]) / ((j1 - j0) * s.res);
+        const len = Math.hypot(dhdx, 1, dhdz);
+        const ny = 1 / len;
+        norms[k * 3] = -dhdx / len; norms[k * 3 + 1] = ny; norms[k * 3 + 2] = -dhdz / len;
+
+        // Mismo criterio que el terreno fino: lo llano se lee como tierra y la
+        // ladera como roca. A 25 m por muestra una ladera de sierra sale mas
+        // tendida de lo que es, asi que la pendiente se lee antes.
+        const c = lerp3(GROUND_FLAT, GROUND_STEEP, smoothstep(0.06, 0.34, 1 - ny));
+        const r = 0.88 + 0.24 * hash(i, j);
+        cols[k * 3] = c[0] * r; cols[k * 3 + 1] = c[1] * r; cols[k * 3 + 2] = c[2] * r;
+      }
+    }
+
+    const idx = [];
+    for (let j = 0; j < s.h - 1; j++) {
+      for (let i = 0; i < s.w - 1; i++) {
+        const x = s.x0 + (i + 1) * s.res, z = s.z0 + (j + 1) * s.res;
+        // El cuadro entero bien metido en el casco: no se dibuja.
+        if (this.dentroDelCasco(x, z) > OCULTO + s.res) continue;
+        const a = j * s.w + i;
+        idx.push(a, a + s.w, a + 1, a + 1, a + s.w, a + s.w + 1);
+      }
+    }
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(norms, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+    g.computeBoundingSphere();
+
+    const mesh = new THREE.Mesh(g, terrainMaterial(1.0, this.uClima));
+    mesh.name = 'Sierra';
+    // Ni proyecta ni recibe sombra. La caja de sombra sigue al jugador con 200 m
+    // de semilado: meter 14 km dentro no anade una sola sombra util y en cambio
+    // obliga a recorrer medio millon de triangulos por fotograma para el mapa.
+    mesh.userData.sinSombra = true;
+    console.log(`sierra: ${s.w}x${s.h} a ${s.res} m | ${idx.length / 3} triangulos`
+      + ` | cota ${s.min.toFixed(0)}-${s.max.toFixed(0)} m`);
     return mesh;
   }
 

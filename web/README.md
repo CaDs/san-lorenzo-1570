@@ -12,9 +12,16 @@ JavaScript en vez de 49 MB de wasm+pck.
 
 ## Los datos
 
-`data/build/world.json` y `terrain.bin` son lo unico que el juego descarga. El
-navegador los lee tal cual: `fetch` y `new Float32Array(buffer)`. Los produce
-`tools/prep.py` desde el MDT del IGN y OpenStreetMap; ver ATTRIBUTION.md.
+`data/build/world.json`, `terrain.bin` y `sierra.bin` son lo unico que el juego
+descarga. El navegador los lee tal cual: `fetch` y `new Float32Array(buffer)`.
+Los produce `tools/prep.py` desde el MDT del IGN y OpenStreetMap; ver
+ATTRIBUTION.md.
+
+Son dos anillos. El del casco -Ring A- va a 5 m por muestra y trae ademas casas y
+calles: 3,6 x 2,1 km. El de la sierra -Ring B- va a 25 m y es solo relieve, 14 x
+12 km, y llega de Abantos por el norte a la Silla de Felipe II por el sur. Los
+cuatro bordes del primero caen justo encima de una linea de la rejilla del
+segundo, y de eso depende que el hueco se recorte sin dejar diente de sierra.
 
 ## Ficheros
 
@@ -24,6 +31,8 @@ navegador los lee tal cual: `fetch` y `new Float32Array(buffer)`. Los produce
 | `daynight.js` | ciclo solar real por latitud, cielo procedural, estrellas, sombras |
 | `player.js` | andar, correr, volar, colision contra fachadas |
 | `minimap.js` | pergamino de esquina |
+| `ambiente.js` | que deberia oirse, en numeros: puro, con su test de node |
+| `sonido.js` | el grafo de Web Audio; ahora mismo, la campana del Monasterio |
 | `trees.js` | arquetipos de encina y pino, instanciados |
 | `npcs.js` | vecinos, perros, gatos, vacas, ovejas, gallinas, pajaros y el rey |
 | `quests.js` | el hilo del encargo en curso y el pergamino de dialogo |
