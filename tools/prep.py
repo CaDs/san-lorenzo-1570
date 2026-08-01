@@ -41,39 +41,166 @@ FALLBACK = {"garage": 2.5, "shed": 2.5, "hut": 2.5, "carport": 2.5,
             "apartments": 12.0, "church": 15.0, "public": 10.0}
 
 def height_of(tags):
+    lv = tags.get("building:levels")
+    plantas = None
+    if lv:
+        m = re.match(r"\s*([\d.]+)", lv)
+        # `building:levels=0` tampoco es un dato: es la casilla puesta a cero.
+        # El Ayuntamiento de San Lorenzo lo trae asi, y con height=0 ademas, de
+        # modo que se quedaba plano contra el suelo por partida doble.
+        if m and float(m.group(1)) >= 1:
+            plantas = float(m.group(1)) * FLOOR_M
+
     h = tags.get("height")
     if h:
         m = re.match(r"\s*([\d.]+)", h)          # "12", "12 m", "12.5m"
         if m:
-            return float(m.group(1))
-    lv = tags.get("building:levels")
-    if lv:
-        m = re.match(r"\s*([\d.]+)", lv)
-        if m:
-            return float(m.group(1)) * FLOOR_M
+            v = float(m.group(1))
+            # Un `height` por debajo de metro y medio en un edificio que ADEMAS
+            # declara plantas no es una altura: es la casilla sin rellenar. En
+            # este pueblo hay 38 asi, y el guion se las creia: la Iglesia de San
+            # Bernabe -tres plantas segun OSM, y la de la campana rajada del
+            # encargo- se dibujaba de UN CENTIMETRO, igual que San Lorenzo
+            # Martir, el Centro Cultural y un bloque de seis alturas.
+            #
+            # Por debajo de MEDIO metro no se respeta ni aunque no haya plantas:
+            # un cero no es una altura en ningun caso. Con eso salen tambien el
+            # Ayuntamiento, la Plaza de Toros y la Casa de los Doctores, que
+            # traen height=0 a secas y estaban igual de aplastados.
+            #
+            # Entre medio metro y metro y medio sin plantas SI se respeta: hay
+            # dos huellas de 0,75 y 1,0 m que son de verdad lo que dicen -un
+            # pretil y una tapia- y subirlas a la altura por defecto seria
+            # plantar un edificio de ocho metros donde hay un murete.
+            if v >= 1.5 or (plantas is None and v >= 0.5):
+                return v
+    if plantas is not None:
+        return plantas
     return FALLBACK.get(tags.get("building"), 8.0)
 
 # ------------------------------------------------- osm -> geojson -> utm
+def sin_choque(tags):
+    """1 si la huella NO debe frenar a nadie a ras de suelo.
+
+    Se sigue dibujando: lo que cambia es la colision. Son cosas que en OSM estan
+    marcadas como que no arrancan del suelo y que aqui, al aplastarlo todo a
+    cota cero, se convertian en muros:
+
+      layer > 0        Estructuras por ENCIMA de la calle. La que cortaba 56 m
+                       de la calle Floridablanca -la peor de todas- es un
+                       way con height=2 y layer=1: una marquesina sobre la calle
+                       peatonal, no un edificio en medio.
+      building=roof    Un techo sobre pies. Por definicion se pasa por debajo.
+      min_height >= 2  Lo mismo dicho con numeros: la fabrica empieza a esa
+                       altura y debajo no hay nada.
+
+    Son 33 de 3545. No es una heuristica: es leer lo que OSM ya dice y que este
+    guion tiraba.
+    """
+    try:
+        if int(float(tags.get("layer", 0))) > 0:
+            return 1
+    except ValueError:
+        pass
+    if tags.get("building") == "roof":
+        return 1
+    try:
+        if float(tags.get("min_height", 0)) >= 2.0:
+            return 1
+    except ValueError:
+        pass
+    return 0
+
+
+# Vias que NO abren paso aunque la geometria diga que si.
+#
+# La regla que de verdad destapo las calles del entorno de la lonja es geometrica
+# y esta en world.js: si el eje de una calle cae dentro de una huella, por ahi se
+# pasa. Es la buena, y por eso no se toca. Pero abre de mas en un caso concreto y
+# conocido, y para eso esta esta lista: para cerrarlo a mano en vez de debilitar
+# la regla por un caso.
+CERRADOS = {
+    # Vial de servicio que MUERE dentro de una nave industrial: sus dos extremos
+    # no enlazan con otras vias, asi que no lleva a ninguna parte. Un almacen no
+    # es una calle, y poder entrar en el no arregla ningun recorrido.
+    206563461,
+}
+
+# Y lo contrario: vias que SI son paso aunque no lo diga ni la etiqueta ni la
+# geometria. Van por id de OSM y no por coordenada, que las coordenadas se mueven
+# al cambiar el encuadre.
+#
+# El criterio para entrar aqui es doble y hay que cumplir los dos: que la via sea
+# DE PASO -sus dos extremos enlazan con otras vias- y que ni OSM ni la geometria
+# den ninguna otra explicacion.
+#
+# Si alguna vez se arreglan en OSM, estas lineas sobran y se borran.
+PASOS_A_MANO = {
+    # Senda que cruza un `building=yes` de 0,75 m de alto. El pretil es real y
+    # por eso se respeta su altura (ver height_of), pero la senda tambien lo es y
+    # esta cartografiada atravesandolo: OSM se contradice consigo mismo y aqui
+    # gana la senda, que es la que lleva a alguna parte.
+    1201512394,
+    # Vial de servicio entre dos bloques de pisos, con cero hueco libre: es el
+    # portalon que da al patio de manzana. En OSM la via esta y el arco no.
+    29279219,
+    # Calle Floridablanca. Es peatonal y de paso, y le quedan tres metros
+    # comidos por la esquina de una huella.
+    29329563,
+}
+
+
 def rings(el):
-    """Anillos exteriores en [(lon,lat),...]. Los agujeros se ignoran (v1)."""
+    """[(exterior, [agujeros...]), ...] en [(lon,lat),...].
+
+    Los agujeros SE USAN. Antes se tiraban -"(v1)", decia el comentario- y eso
+    rellenaba macizos los 98 edificios con patio del pueblo: el Monasterio con
+    sus 16 patios, la Casa de la Reina, la Tercera Casa de Oficios, el
+    Ayuntamiento y hasta la Plaza de Toros. No era solo feo desde arriba: las
+    sendas que cruzan el patio de la Casa de la Compaña quedaban tapiadas, y esas
+    cinco eran la mitad de las calles cortadas que quedaban en el pueblo.
+    """
     if el["type"] == "way":
-        return [[(p["lon"], p["lat"]) for p in el["geometry"]]] if el.get("geometry") else []
-    out = []
+        g = el.get("geometry")
+        return [([(p["lon"], p["lat"]) for p in g], [])] if g else []
+    # Solo `outer` y el rol vacio son contorno. Los otros dos roles que aparecen
+    # aqui NO son edificios: `part` son los 170 building:part -detalle 3D de un
+    # mismo edificio, que como poligono suelto duplicaria la geometria- y
+    # `outline` son 2 contornos de una relacion que ya viene por otro lado.
+    # Meterlos subia el pueblo de 3545 casas a 3716 sin que hubiera ni una mas.
+    fuera, dentro = [], []
     for mem in el.get("members", []):
-        if mem.get("role") in ("outer", "") and mem.get("geometry"):
-            out.append([(p["lon"], p["lat"]) for p in mem["geometry"]])
-    return out
+        if not mem.get("geometry"):
+            continue
+        rol = mem.get("role", "")
+        if rol == "inner":
+            dentro.append([(p["lon"], p["lat"]) for p in mem["geometry"]])
+        elif rol in ("outer", ""):
+            fuera.append([(p["lon"], p["lat"]) for p in mem["geometry"]])
+    if not fuera:
+        return []
+    # Con varios exteriores se le dan los agujeros al primero y los demas van
+    # sueltos: una relacion con dos cuerpos y un patio en cada uno es rarisima, y
+    # repartirlos por contencion costaria mas que lo que arregla.
+    return [(fuera[0], dentro)] + [(f, []) for f in fuera[1:]]
 
 print("1/5 leyendo OSM ...", flush=True)
 osm = json.load(open(f"{RAW}/buildings.json"))
 feats = []
 for el in osm["elements"]:
     tags = el.get("tags", {})
-    for r in rings(el):
+    for r, agujeros in rings(el):
         if len(r) < 4:
             continue
         if r[0] != r[-1]:
             r.append(r[0])
+        huecos = []
+        for a in agujeros:
+            if len(a) < 4:
+                continue
+            if a[0] != a[-1]:
+                a.append(a[0])
+            huecos.append(a)
         # El nombre viaja hasta world.json: OSM sabe como se llaman la Iglesia
         # de San Bernabe, el Ayuntamiento o el Real Coliseo, y sin eso los
         # vecinos del juego solo pueden decir "hacia el nordeste" en vez de
@@ -81,8 +208,11 @@ for el in osm["elements"]:
         feats.append({"type": "Feature",
                       "properties": {"h": height_of(tags),
                                      "n": tags.get("name", ""),
+                                     "i": el.get("id", 0),
+                                     "x": sin_choque(tags),
                                      "a": tags.get("amenity", "")},
-                      "geometry": {"type": "Polygon", "coordinates": [r]}})
+                      "geometry": {"type": "Polygon",
+                                   "coordinates": [r] + huecos}})
 print(f"    {len(feats)} poligonos")
 
 os.makedirs(BUILD, exist_ok=True)
@@ -116,7 +246,10 @@ for f in utm["features"]:
     idx = (len(pts), len(pts) + len(ring))
     pts.extend(clamp(x, y) for x, y in ring)
     polys.append({"h": f["properties"]["h"], "ring": ring, "idx": idx,
+                  "holes": f["geometry"]["coordinates"][1:],
                   "n": f["properties"].get("n", ""),
+                  "i": f["properties"].get("i", 0),
+                  "x": f["properties"].get("x", 0),
                   "a": f["properties"].get("a", "")})
 print(f"    {fuera} fuera del area, {len(polys)} dentro")
 
@@ -150,7 +283,7 @@ ROAD_W = {
     "primary": 10.0, "primary_link": 6.0, "secondary": 8.5, "secondary_link": 6.0,
     "tertiary": 7.0, "tertiary_link": 5.0, "unclassified": 6.0, "residential": 6.0,
     "living_street": 5.5, "pedestrian": 5.0, "service": 4.0, "track": 3.0,
-    "cycleway": 2.5, "footway": 2.2, "path": 1.8, "steps": 1.6,
+    "cycleway": 2.5, "footway": 2.2, "path": 1.8, "steps": 1.6, "ladder": 1.2,
 }
 
 print("5/6 leyendo viario ...", flush=True)
@@ -159,8 +292,31 @@ rfeats = []
 for el in rd["elements"]:
     tags = el.get("tags", {})
     geom = el.get("geometry")
-    if not geom or len(geom) < 2 or tags.get("tunnel") in ("yes", "building_passage"):
+    if not geom or len(geom) < 2:
         continue
+    # Las vias que pasan por debajo -o por encima- de un edificio se TIRABAN, y
+    # eso dejaba calles sin salida: el edificio se sigue dibujando macizo, asi
+    # que al borrar la via el hueco por el que se pasa de verdad se volvia muro.
+    #
+    # OSM lo dice de tres maneras distintas y hay que escucharlas todas, que es
+    # lo que no se hacia:
+    #   tunnel=yes / building_passage   19 vias: soportales, sendas que cruzan
+    #                                   bajo una casa, escaleras que salen por un
+    #                                   arco, y dos avenidas enteras.
+    #   covered=yes                      2 vias: la calle Capilla y la calle
+    #                                   Grimaldi, que van cubiertas de verdad.
+    #   bridge=yes                      10 vias: van por encima. Aqui el viario
+    #                                   no tiene cota propia, asi que en planta
+    #                                   pisan lo que haya debajo; dejarlas
+    #                                   bloqueadas seria cortar un puente.
+    #
+    # Se quedan, marcadas con `t`, para dos cosas: que el grafo de calles siga
+    # conectado -si no, los vecinos no pueden ir de un lado al otro del pueblo- y
+    # que la colision sepa que por ahi SI se pasa aunque haya un edificio encima.
+    paso = 1 if (tags.get("tunnel") in ("yes", "building_passage")
+                 or tags.get("covered") == "yes"
+                 or tags.get("bridge") == "yes"
+                 or el.get("id") in PASOS_A_MANO) else 0
     kind = tags.get("highway", "service")
     w = ROAD_W.get(kind, 4.0)
     if "width" in tags:
@@ -172,6 +328,8 @@ for el in rd["elements"]:
     lit = (lit not in ("no", "disused")) if lit else (w >= 4.0)
     rfeats.append({"type": "Feature",
                    "properties": {"w": w, "lit": int(lit), "z": min(int(w / 3.0), 4),
+                                  "t": paso, "id": el.get("id", 0),
+                                  "c": 1 if el.get("id") in CERRADOS else 0,
                                   "n": tags.get("name", "")},
                    "geometry": {"type": "LineString",
                                 "coordinates": [(p["lon"], p["lat"]) for p in geom]}})
@@ -216,14 +374,25 @@ for f in json.load(open(tmpr25830))["features"]:
             if i:
                 total_m += ((p[0] - r[i - 1][0]) ** 2 + (p[1] - r[i - 1][1]) ** 2) ** 0.5
             flat += [p[0], p[1]]
-        r_out = {"w": prop["w"], "l": prop["lit"], "z": prop["z"], "p": flat}
+        # El id de OSM viaja hasta el juego. Son 18 KB sobre un repositorio que
+        # ya lleva un heightmap binario, y es lo que permite senalar una calle
+        # concreta sin describirla: cuando una via sale mal, se mira en OSM por
+        # su id y se arregla alli, o se le pone excepcion aqui por id y no por
+        # coordenada, que las coordenadas cambian al mover el encuadre.
+        r_out = {"w": prop["w"], "l": prop["lit"], "z": prop["z"],
+                 "i": prop["id"], "p": flat}
+        if prop.get("t"):
+            r_out["t"] = 1
+        if prop.get("c"):
+            r_out["c"] = 1
         # Al partir una via en tramos el nombre se repite en cada uno. Es lo
         # que se quiere: cualquier tramo sabe decir por que calle va.
         if prop.get("n"):
             r_out["n"] = prop["n"]
         roads.append(r_out)
 print(f"    {len(roads)} tramos, {total_m / 1000:.1f} km, "
-      f"{sum(r['l'] for r in roads)} alumbrados, {cortadas} recortadas al borde")
+      f"{sum(r['l'] for r in roads)} alumbrados, {cortadas} recortadas al borde, "
+      f"{sum(r.get('t', 0) for r in roads)} pasos bajo edificio o tunel")
 
 # --------------------------------------------------------------- salida
 print("6/6 escribiendo world.json ...", flush=True)
@@ -238,8 +407,18 @@ for p in polys:
         flat += [round(x - X0, 2), round(Y1 - y, 2)]   # -> X, Z locales
     # h = altura real del edificio segun OSM, aparte de t: permite exagerar la
     # verticalidad sin tocar la falda que se adapta a la cuesta.
+    # El id de OSM viaja tambien aqui, por lo mismo que en el viario: cuando
+    # una huella tapa una calle hay que poder mirarla en OSM sin describirla.
     b_out = {"b": round(base, 2), "t": round(top, 2),
-             "h": round(p["h"], 2), "p": flat}
+             "h": round(p["h"], 2), "i": p.get("i", 0), "p": flat}
+    # Los patios, en el mismo sistema local. Solo los llevan 98 de 3545, asi que
+    # el resto no engorda world.json con listas vacias.
+    if p.get("holes"):
+        b_out["q"] = [[c for x, y in h[:-1]
+                       for c in (round(x - X0, 2), round(Y1 - y, 2))]
+                      for h in p["holes"] if len(h) >= 4]
+    if p.get("x"):
+        b_out["x"] = 1
     # Solo los 71 edificios con nombre cargan el campo; los otros 3474 no
     # engordan world.json con comillas vacias.
     if p["n"]:
