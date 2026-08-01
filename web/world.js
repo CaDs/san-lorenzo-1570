@@ -1368,7 +1368,7 @@ export class World extends THREE.Group {
       lenas++;
     }
 
-    console.log(`vida: ${pozos} pozos | ${carros} carros | ${lenas} pilas de lena`);
+    console.log(`vida: ${pozos} pozos | ${carros} carros | ${lenas} pilas de leña`);
     const mesh = new THREE.Mesh(soup.geometry(),
       new THREE.MeshLambertMaterial({ vertexColors: true }));
     mesh.name = 'Atrezzo';

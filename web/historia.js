@@ -35,7 +35,7 @@ export const CARTELAS = [
     sitio: 'Monasterio',
     titulo: 'La primera piedra',
     texto: 'Se puso el 23 de abril de 1563. Cuando andas por aqui lleva siete '
-      + 'anos de obra y le quedan veintiuno: la fabrica no se da por acabada '
+      + 'años de obra y le quedan veintiuno: la fabrica no se da por acabada '
       + 'hasta el 13 de septiembre de 1584.',
     fuente: PN,
   },
@@ -66,7 +66,7 @@ export const CARTELAS = [
     titulo: 'El obrero mayor',
     texto: 'Fray Antonio de Villacastin (h. 1512 - 3 de marzo de 1603), '
       + 'jeronimo, llego en 1562 para dirigir la obra y siguio en ella cuarenta '
-      + 'anos. No era arquitecto: era un aparejador que aprendio el oficio con '
+      + 'años. No era arquitecto: era un aparejador que aprendio el oficio con '
       + 'un maestro cantero en Toledo. Dejo escritas unas Memorias.',
     fuente: 'Memorias de fray Antonio de Villacastin, ed. Julian Zarco Cuevas',
   },
@@ -123,14 +123,14 @@ export const VOCES = {
       + 'y de la obra manda fray Antonio, que lleva aqui desde el principio.',
     'Se llama San Lorenzo por la batalla de San Quintin, que se gano en su dia. '
       + 'Por eso la planta es una parrilla: el santo murio asado en una.',
-    'El convento se cierra el ano que viene, si Dios quiere. Lo demas -la casa '
+    'El convento se cierra el año que viene, si Dios quiere. Lo demas -la casa '
       + 'del rey, la iglesia grande- esta por empezar.',
   ],
   cantero: [
     'El granito sale de aqui al lado. No hay que traerlo de ninguna parte, y esa '
       + 'es media razon de que la casa se plante en este monte y no en otro.',
-    'El maestro Juan Bautista murio hace tres anos. Ahora traza el senor Herrera, '
-      + 'que vino a la obra el mismo ano que se puso la primera piedra.',
+    'El maestro Juan Bautista murio hace tres años. Ahora traza el señor Herrera, '
+      + 'que vino a la obra el mismo año que se puso la primera piedra.',
     'Un sillar bien labrado no necesita casi mortero: se asienta por su peso y '
       + 'por su cara. Lo que mata a un muro es la junta, no la piedra.',
     'De noviembre a marzo no se asienta sillar. La cal no fragua con hielo: se '
@@ -150,13 +150,13 @@ export const VOCES = {
   ],
   pastora: [
     'Esto era monte y pasto antes que nada. Los de Segovia subieron el ganado '
-      + 'aqui hace cuatrocientos anos y desde entonces no ha sido otra cosa.',
+      + 'aqui hace cuatrocientos años y desde entonces no ha sido otra cosa.',
     'El monte es del Rey. Para cortar un roble caido hace falta papel, aunque '
-      + 'lleve dos anos pudriendose.',
+      + 'lleve dos años pudriendose.',
   ],
   pescadero: [
     'Viernes y vigilias. Con un convento al lado y la obra entera comiendo de '
-      + 'pescado la mitad del ano, no doy abasto con las truchas de la sierra.',
+      + 'pescado la mitad del año, no doy abasto con las truchas de la sierra.',
   ],
   tejedora: [
     'Capotes. Los peones duermen fuera y aqui a mil metros el invierno no '

@@ -59,6 +59,8 @@
                  background: rgba(255,217,102,.18); }
   .chip .ico { font-size: 16px; color: rgb(255,217,102); line-height: 1; }
   .chip .lbl { font-size: 13px; }
+  /* Callado o bloqueado: se apaga el icono, que es lo que se mira de reojo. */
+  .chip.off .ico { color: rgb(120,110,95); }
   .chip kbd { font: 10px ui-monospace, monospace; color: rgb(153,128,77);
               background: rgba(255,217,102,.07);
               border: 1px solid rgba(153,128,77,.55); border-radius: 3px;
@@ -129,7 +131,7 @@
       <b>Esc</b> soltar el raton<br>
       <br>
       Todo esto vuelve a estar en la barra de abajo, que no se va: ahi se elige
-      tambien la hora, el dia del ano y el tiempo que hace.
+      tambien la hora, el dia del año y el tiempo que hace.
     </div>
     <div class="entrar" id="estado">levantando el pueblo…</div>
   </div>

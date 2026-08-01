@@ -144,7 +144,7 @@ assert.ok(comprobadas > 0, 'no se ha comprobado ni un deshielo');
 assert.strictEqual(estacionDe(15), 'invierno');
 assert.strictEqual(estacionDe(105), 'primavera');
 assert.strictEqual(estacionDe(195), 'verano');
-assert.strictEqual(estacionDe(290), 'otono');
+assert.strictEqual(estacionDe(290), 'otoño');
 assert.strictEqual(estacionDe(340), 'invierno');
 assert.strictEqual(estacionDe(370), estacionDe(5), 'el ano no da la vuelta');
 

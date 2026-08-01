@@ -123,10 +123,28 @@ export class Lugares {
     return this.antiguos[Math.abs(semilla) % this.antiguos.length];
   }
 
+  // Sin tildes a los dos lados. Los nombres de OSM las llevan -"Iglesia de San
+  // Bernabe" es "Bernabé"- y quien busca desde el codigo escribe sin ellas, que
+  // es la norma de este proyecto. Con la comparacion cruda, buscar('San Bernabe')
+  // devolvia null y la campana se quedaba sin campanario: el fallo no daba error
+  // ni aviso, simplemente no sonaba desde ningun sitio.
+  //
+  // Se quitan solo para COMPARAR. Lo que se lee en pantalla sale del nombre de
+  // OSM tal cual, con su tilde y su ene.
   buscar(texto) {
-    const t = texto.toLowerCase();
-    return this.sitios.find((s) => s.nombre.toLowerCase().includes(t)) || null;
+    const t = sinTildes(texto);
+    return this.sitios.find((s) => sinTildes(s.nombre).includes(t)) || null;
   }
+}
+
+// La ene con virgulilla NO es una e con tilde: se descompone en n + virgulilla y
+// hay que volver a componerla, o "Peñalara" casaria con "Penalara" y el pueblo
+// acabaria buscando sitios que no son. Por eso se recompone con NFC al final.
+export function sinTildes(s) {
+  return s.normalize('NFD')
+    .replace(/[\u0300-\u0302\u0308]/g, '')   // agudo, grave, circunflejo, dieresis
+    .normalize('NFC')
+    .toLowerCase();
 }
 
 // --- geometria y lenguaje -----------------------------------------------

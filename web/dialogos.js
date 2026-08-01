@@ -31,13 +31,13 @@ const OFICIO = {
   ],
   herrero: [
     'Todo el dia calzando mulas para los carros de la piedra.',
-    'Si el fuelle aguanta hasta san Miguel, doy el ano por bueno.',
+    'Si el fuelle aguanta hasta san Miguel, doy el año por bueno.',
     'Herraduras, clavos, grapas para los sillares. No doy abasto.',
     'El hierro no miente: o esta a punto o te quema. Como las personas.',
   ],
   fraile: [
     'Dios te guarde, caminante. Aqui rezamos y levantamos piedra, por ese orden.',
-    'La obra no es para nosotros: es para los que vengan en trescientos anos.',
+    'La obra no es para nosotros: es para los que vengan en trescientos años.',
     'Su Majestad quiere el coro acabado antes que la cupula. Paciencia.',
     'He visto planos que no entiendo y he firmado gastos que no alcanzo.',
   ],
@@ -51,18 +51,18 @@ const OFICIO = {
     'El horno se enciende antes que el sol y se apaga despues que el.',
     'Doscientas hogazas diarias se van a la obra. Doscientas.',
     'Si te levantas temprano te guardo un pan de los buenos.',
-    'Harina cara, lena cara, y el pan al mismo precio. Echa cuentas.',
+    'Harina cara, leña cara, y el pan al mismo precio. Echa cuentas.',
   ],
   cantero: [
     'Venimos de la cantera de la Herreria, arrastrando granito.',
     'Cada sillar pesa lo que tres bueyes. De dia al sol, de noche a las hogueras.',
-    'La piedra de aqui es dura y agradecida: bien labrada dura mil anos.',
+    'La piedra de aqui es dura y agradecida: bien labrada dura mil años.',
     'Se me han gastado dos punteros esta semana. La sierra no perdona.',
   ],
   pescadero: [
-    'Truchas de los arroyos de la sierra, frescas de esta manana.',
+    'Truchas de los arroyos de la sierra, frescas de esta mañana.',
     'En viernes vendo el doble y duermo la mitad.',
-    'Lo que no se vende hoy, manana ni regalado.',
+    'Lo que no se vende hoy, mañana ni regalado.',
     'Antes bajaba a Madrid a vender. Ahora Madrid sube aqui a comprar.',
   ],
   tejedora: [
@@ -127,7 +127,7 @@ const ANIMAL = {
   perronegro: [
     'Grune sin levantar la cabeza. No deja de mirarte ni un momento.',
     'Un ladrido seco, uno solo, y el eco tarda demasiado en volver.',
-    'Ensena los dientes. Los peones de la obra dicen que le brillan los ojos.',
+    'Enseña los dientes. Los peones de la obra dicen que le brillan los ojos.',
     'Se planta entre tu y el hombre de negro, y grune mas hondo.',
     'No ladra. Espera. Es peor.',
   ],
@@ -247,13 +247,13 @@ const REY = [
   'Esta casa no la levanto yo. La levanta el que la ha de habitar cuando yo no este.',
   'Se gano en su dia, y en su dia se paga. Lo que se promete en una batalla se debe.',
   'Una parrilla. Le pareceria a alguien mal augurio. A mi me parece justicia.',
-  'Cuento las piedras y no me salen. Cuento los anos y tampoco.',
+  'Cuento las piedras y no me salen. Cuento los años y tampoco.',
   'Hay quien dice que mis galerias llegan a una puerta que no conviene abrir.',
   'Mil setecientas reliquias no bastan. Dos mil, quiza.',
   'Se ha soltado. Todas las noches se suelta, y todas las noches aullan los peones.',
   'No le tengas miedo. O tenselo, que a mi tampoco me hace caso.',
   'De aqui no sale nadie sin dejar algo. Yo dejo esto.',
-  'Preguntame manana. Manana no estare.',
+  'Preguntame mañana. Mañana no estare.',
 ];
 
 function hablarRey(npc, ctx) {

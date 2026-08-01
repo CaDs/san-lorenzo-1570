@@ -24,10 +24,10 @@ export const MISTERIOS = [
   {
     id: 'marcas', tipo: 'objeto', nombre: 'Las marcas de los canteros',
     pista: 'Dicen que la piedra esta firmada, si sabes donde mirar.',
-    texto: 'En el sillar hay grabada una figura pequena: una cruz con un rabo, '
+    texto: 'En el sillar hay grabada una figura pequeña: una cruz con un rabo, '
       + 'como una llave. Cada cuadrilla marca lo suyo para que le paguen por '
       + 'pieza. Este cantero no sabe escribir su nombre y aun asi lleva '
-      + 'cuatrocientos anos firmando.',
+      + 'cuatrocientos años firmando.',
   },
   {
     id: 'galerias', tipo: 'objeto', nombre: 'La boca que no lleva a ninguna parte',
@@ -38,7 +38,7 @@ export const MISTERIOS = [
       + 'a una puerta que no conviene abrir.',
   },
   {
-    id: 'campana', tipo: 'objeto', nombre: 'La campana que suena a lena',
+    id: 'campana', tipo: 'objeto', nombre: 'La campana que suena a leña',
     pista: 'Suena, pero no como debe.',
     texto: 'Un golpe seco, sin cola. La rajadura no se ve por fuera. Los viejos '
       + 'dicen que se rajo sola la noche que murio un peon en el andamio, y que '
@@ -46,7 +46,7 @@ export const MISTERIOS = [
   },
   {
     id: 'silla', tipo: 'objeto', nombre: 'La silla en la roca',
-    pista: 'Alguien se sento aqui a mirar como crecia una montana.',
+    pista: 'Alguien se sento aqui a mirar como crecia una montaña.',
     texto: 'Unos escalones y un asiento labrados en el granito, mirando a la '
       + 'obra. Se dice que el Rey sube a sentarse aqui a ver como sube la '
       + 'fabrica, y que se esta horas sin hablar con nadie. Nadie lo ha visto '
@@ -85,7 +85,7 @@ export const MISTERIOS = [
   {
     id: 'mano', tipo: 'objeto', nombre: 'La mano en la argamasa',
     pista: 'Alguien dejo la mano puesta antes de que fraguara.',
-    texto: 'Una huella de mano abierta, pequena, en la junta. De un chico de los '
+    texto: 'Una huella de mano abierta, pequeña, en la junta. De un chico de los '
       + 'que suben el agua, quiza. Los peones no la pican: dicen que la casa '
       + 'necesita que alguien la haya tocado con la mano desnuda, y que si se '
       + 'borra hay que poner otra.',
@@ -93,7 +93,7 @@ export const MISTERIOS = [
   {
     id: 'lobo', tipo: 'objeto', nombre: 'Las huellas de la dehesa',
     pista: 'Mas anchas que las de un perro, y no van a ninguna parte.',
-    texto: 'Huellas en el barro, anchas, con las unas marcadas. Vienen del monte '
+    texto: 'Huellas en el barro, anchas, con las uñas marcadas. Vienen del monte '
       + 'y se paran aqui: no siguen, no dan la vuelta, no entran en ningun '
       + 'sitio. Simplemente se acaban.',
   },
@@ -110,7 +110,7 @@ export const MISTERIOS = [
     pista: 'Tiene reja, tiene marco, y detras no hay nada.',
     texto: 'Una ventana enrejada a media altura, y al asomarse: piedra maciza a '
       + 'un palmo. O sobro en la traza, o hay una estancia que se tapio con algo '
-      + 'dentro. Los que llevan mas anos aqui prefieren la primera explicacion.',
+      + 'dentro. Los que llevan mas años aqui prefieren la primera explicacion.',
   },
   {
     id: 'moneda', tipo: 'objeto', nombre: 'La moneda bajo el umbral',
@@ -138,10 +138,10 @@ export const MISTERIOS = [
   {
     id: 'cuenta', tipo: 'persona', oficio: 'fraile',
     nombre: 'El que lleva la cuenta de lo que no cuadra',
-    pista: 'Alguien lleva un libro que no ensena a nadie.',
+    pista: 'Alguien lleva un libro que no enseña a nadie.',
     texto: 'Llevo la cuenta de las piedras que entran y de las que se asientan, '
       + 'y no me sale. Faltan. Pocas, pero faltan todos los meses, y llevo asi '
-      + 'cuatro anos. No se las lleva nadie: yo he mirado.',
+      + 'cuatro años. No se las lleva nadie: yo he mirado.',
   },
   {
     id: 'hierro', tipo: 'persona', oficio: 'herrero',
@@ -149,13 +149,13 @@ export const MISTERIOS = [
     pista: 'A alguien le pidieron una pieza rara.',
     texto: 'Me trajeron un dibujo y me dijeron: esto, en hierro, y no preguntes. '
       + 'Ni reja ni cerradura ni herramienta. Lo hice, cobre y me calle. Aun '
-      + 'sueno con la forma que tenia.',
+      + 'sueño con la forma que tenia.',
   },
   {
     id: 'pan', tipo: 'persona', oficio: 'panadera',
     nombre: 'La que amasa de mas todos los viernes',
     pista: 'Alguien hace mas pan del que vende.',
-    texto: 'Dejo dos hogazas en el poyete de fuera cada viernes y a la manana no '
+    texto: 'Dejo dos hogazas en el poyete de fuera cada viernes y a la mañana no '
       + 'estan. Mi madre lo hacia y su madre tambien. Nadie me ha dicho nunca '
       + 'para quien son, y yo no pregunto.',
   },
@@ -172,7 +172,7 @@ export const MISTERIOS = [
     nombre: 'La que tejio un pano que no era para nadie',
     pista: 'Un encargo que nadie vino a recoger.',
     texto: 'Nueve varas de pano negro, sin ribete, y las medidas de un hombre '
-      + 'alto. Lo pagaron por delante. Lleva tres anos doblado en el arca, y '
+      + 'alto. Lo pagaron por delante. Lleva tres años doblado en el arca, y '
       + 'cada vez que lo saco a airear esta como el primer dia.',
   },
   {
@@ -188,13 +188,13 @@ export const MISTERIOS = [
     nombre: 'La que sabe lo que habia antes',
     pista: 'Alguien se acuerda de esto cuando no habia nada.',
     texto: 'Yo subia el ganado aqui cuando esto era monte y no habia mas que '
-      + 'jaras y un corral. Vinieron, midieron, y en un ano habia mil hombres. '
+      + 'jaras y un corral. Vinieron, midieron, y en un año habia mil hombres. '
       + 'De lo que habia antes ya no queda quien se acuerde, salvo yo, y yo me '
       + 'estoy acabando.',
   },
   {
     id: 'nino', tipo: 'persona', oficio: 'panadera',
-    nombre: 'La que cuenta lo del nino de la obra',
+    nombre: 'La que cuenta lo del niño de la obra',
     pista: 'Falta alguien y nadie lo dice en voz alta.',
     texto: 'Habia un chico que subia el agua a los andamios. Un dia no vino y no '
       + 'lo busco nadie, porque no era de aqui. Yo le guardaba pan. Sigo '
@@ -211,9 +211,9 @@ export const MISTERIOS = [
   {
     id: 'sacristan', tipo: 'persona', oficio: 'fraile',
     nombre: 'El que cierra y vuelve a encontrar abierto',
-    pista: 'Alguien echa la llave y a la manana no esta echada.',
+    pista: 'Alguien echa la llave y a la mañana no esta echada.',
     texto: 'Cierro yo, con mi llave, y soy el unico que la tiene. Tres veces en '
-      + 'lo que va de ano me la he encontrado abierta al alba, y con las velas '
+      + 'lo que va de año me la he encontrado abierta al alba, y con las velas '
       + 'consumidas hasta abajo, como si alguien hubiera velado toda la noche.',
   },
 ];

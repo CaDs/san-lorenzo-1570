@@ -26,7 +26,7 @@ const DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 // Primer dia de cada estacion, para los cuatro botones de salto. Son los mismos
 // cortes que usa estacionDe() en clima.js.
-const SALTOS = [['invierno', 20], ['primavera', 105], ['verano', 200], ['otono', 290]];
+const SALTOS = [['invierno', 20], ['primavera', 105], ['verano', 200], ['otoño', 290]];
 
 // Un simbolo por estado, para que la barra diga el tiempo sin leerla. Estan
 // elegidos MIRANDOLOS pintados a 16 px y no por lo que significan en la tabla
@@ -38,9 +38,10 @@ const SIMBOLO = {
 };
 
 export class Barra {
-  constructor({ cielo, misiones }) {
+  constructor({ cielo, misiones, sonido }) {
     this.cielo = cielo;
     this.misiones = misiones;
+    this.sonido = sonido;
     this.abierto = null;
 
     const el = document.createElement('div');
@@ -49,6 +50,7 @@ export class Barra {
       <button class="chip" id="c-tiempo"><span class="ico">◐</span><span class="lbl"></span><kbd>P</kbd></button>
       <button class="chip" id="c-clima"><span class="ico" id="c-clima-ico">☁</span><span class="lbl"></span></button>
       <div class="grow"></div>
+      <button class="chip" id="c-sonido"><span class="ico" id="c-sonido-ico">♪</span><span class="lbl"></span></button>
       <button class="chip" id="c-misterios"><span class="ico">✦</span><span class="lbl"></span></button>
       <button class="chip" id="c-saber"><span class="ico">✎</span><span class="lbl"></span></button>
       <button class="chip" id="c-ayuda"><span class="ico">?</span><span class="lbl">ayuda</span></button>`;
@@ -70,6 +72,12 @@ export class Barra {
     el.querySelector('#c-clima').onclick = () => this.alternar('clima');
     el.querySelector('#c-ayuda').onclick = () => this.alternar('ayuda');
     el.querySelector('#c-misterios').onclick = () => this.alternar('misterios');
+    // Interruptor, sin panel: mientras la unica capa sea la campana no hay nada
+    // que regular. El deslizador de volumen, cuando haya mezcla que dosificar.
+    el.querySelector('#c-sonido').onclick = () => {
+      this.sonido.silencio(!this.sonido.on);
+      this.repintar();
+    };
     // Con cartela por leer, el chip la abre; sin ella, es el interruptor del
     // modo. Es un solo boton porque es una sola cosa: lo que se sabe del sitio.
     el.querySelector('#c-saber').onclick = () => {
@@ -130,7 +138,7 @@ export class Barra {
         <button class="mini" data-h="18.5">ocaso</button>
         <button class="mini" data-h="22">noche</button></div>
       <div class="fila"><button class="mini" id="t-correr"></button></div>
-      <div class="fila"><b>dia del ano</b><span id="t-fecha"></span></div>
+      <div class="fila"><b>dia del año</b><span id="t-fecha"></span></div>
       <input type="range" id="t-dia" min="1" max="365" step="1">
       <div class="fila" id="t-estaciones"></div>
       <div class="nota">El sol sale y se pone donde toca para esta latitud y este
@@ -288,6 +296,15 @@ export class Barra {
     q('#c-tiempo .lbl').textContent = `${reloj}  ·  ${fecha}`;
     q('#c-clima .lbl').textContent = clima.nombre;
     q('#c-clima-ico').textContent = SIMBOLO[clima.estado] || '☁';
+
+    // El chip dice la verdad del audio. Si el navegador lo bloquea se ve, en vez
+    // de dejar un juego mudo sin explicacion: ese es el fallo que hace perder una
+    // tarde buscando en el codigo lo que estaba en la politica del navegador.
+    const so = this.sonido;
+    q('#c-sonido-ico').textContent = so.on && so.estado === 'sonando' ? '♪' : '⊘';
+    q('#c-sonido .lbl').textContent = so.estado !== 'sonando' ? so.estado
+      : (so.on ? (so.ultima || 'campanas') : 'callado');
+    q('#c-sonido').classList.toggle('off', !so.on || so.estado !== 'sonando');
     const saber = this.misiones && this.misiones.educativo;
     const cartela = saber && this.misiones.cartela;
     // Con cartela por leer el chip lo dice, y ese es todo el aviso que hace
@@ -332,7 +349,7 @@ export class Barra {
     P('#w-modo').textContent = c.climaForzado ? 'impuesto' : 'automatico';
     P('#w-nota').textContent = c.climaForzado
       ? 'Fijado a mano. Vuelve a automatico para que lo decida la estacion.'
-      : `Lo sortea la epoca del ano con los datos de la sierra: en ${fecha
+      : `Lo sortea la epoca del año con los datos de la sierra: en ${fecha
         .replace(/^\d+ de /, '')} manda esto.`;
     for (const b of this.pClima.querySelectorAll('[data-clima]')) {
       const on = b.dataset.clima === 'auto'

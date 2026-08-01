@@ -184,7 +184,7 @@ for (const [t, v] of cuenta) {
 // encargo, y que los temas de temporada salgan cuando toca y NO salgan fuera:
 // una etiqueta que no filtra nada es una etiqueta que sobra.
 
-const ESTACIONES = ['invierno', 'primavera', 'verano', 'otono'];
+const ESTACIONES = ['invierno', 'primavera', 'verano', 'otoño'];
 const ESTADOS_CLIMA = ['despejado', 'nubes', 'cubierto', 'niebla', 'lluvia',
   'tormenta', 'nieve'];
 
@@ -240,9 +240,9 @@ assert.ok(helada, 'el encargo de la helada no sale nunca');
 for (const d of helada) {
   assert.ok(d.includes('/helada'), `el encargo de la helada sale en ${d}`);
 }
-const lena = dondeSale('no hay lena cortada');
+const lena = dondeSale('no hay leña cortada');
 assert.ok(lena, 'el encargo de la lena no sale nunca');
-for (const d of lena) assert.ok(d.startsWith('otono/'), `la lena sale en ${d}`);
+for (const d of lena) assert.ok(d.startsWith('otoño/'), `la leña sale en ${d}`);
 
 // Y sin saber el tiempo -que es como arranca una partida antes del primer
 // fotograma- solo pueden salir los de siempre, nunca uno de temporada.

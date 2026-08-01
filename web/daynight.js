@@ -138,7 +138,13 @@ export class DayNight {
     this.lat = lat;
     this.semilla = semilla >>> 0 || 1;
     this.hour = 21.5;
-    this.daySeconds = 480.0;     // lo que dura un dia completo en tiempo real
+    // Un minuto de reloj de verdad por cada hora del pueblo. Estaba en 480 s -o
+    // sea el dia entero en ocho minutos-, y con las campanas puestas eso son ocho
+    // horas del oficio en ocho minutos: una campanada por minuto, que cansa en
+    // dos vueltas. A 1440 s se tane cada tres minutos largos y el dia sigue
+    // pasando lo bastante deprisa como para ver anochecer sin esperar. Y quien
+    // quiera otra cosa tiene el deslizador de la barra y ?hour=.
+    this.daySeconds = 1440.0;
     this.dayOfYear = 300;        // finales de octubre, que es como nacio esto
     this.paused = false;
     // null = el tiempo que toque; una clave de ESTADOS = el que se ha impuesto

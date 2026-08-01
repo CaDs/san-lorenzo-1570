@@ -101,7 +101,7 @@ const ESTACIONES = [
   { nombre: 'invierno', desde: 335, hasta: 79 },
   { nombre: 'primavera', desde: 79, hasta: 171 },
   { nombre: 'verano', desde: 171, hasta: 265 },
-  { nombre: 'otono', desde: 265, hasta: 335 },
+  { nombre: 'otoño', desde: 265, hasta: 335 },
 ];
 
 export function estacionDe(dia) {

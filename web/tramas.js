@@ -103,7 +103,7 @@ const TEMAS = [
     pedir: [
       ['La cal esta cuajando seca y sin agua no se asienta ni un sillar.',
         'Avisa al aguador antes de que el sol pegue de veras.'],
-      ['Se nos han roto dos cantaros contra la piedra esta manana.',
+      ['Se nos han roto dos cantaros contra la piedra esta mañana.',
         'Sin agua, aqui hoy no se levanta nada. Busca quien la traiga.'],
     ],
     recado: [
@@ -124,7 +124,7 @@ const TEMAS = [
     motivo: 'se han gastado los punteros de labrar la piedra',
     pedir: [
       ['Dos punteros me he comido esta semana. El granito no perdona.',
-        'Dile al herrero que los quiero recalzados para manana al alba.'],
+        'Dile al herrero que los quiero recalzados para mañana al alba.'],
       ['La sierra viene mellada de la cantera de la Herreria.',
         'Sin hierro a punto, el sillar sale torcido. Busca al herrero.'],
     ],
@@ -135,7 +135,7 @@ const TEMAS = [
     llegada: 'Un carro de piedra atascado, y la rueda con el aro suelto. Tambien eso es hierro.',
     cerrar: [
       ['Con la herramienta a punto se labra el doble. Buen recado.',
-        'Bien labrada, esta piedra dura mil anos. Acuerdate de eso.'],
+        'Bien labrada, esta piedra dura mil años. Acuerdate de eso.'],
       ['Ya me lo ha mandado con el chico. Se agradece.',
         'Anda con Dios, caminante.'],
     ],
@@ -156,7 +156,7 @@ const TEMAS = [
     ],
     llegada: 'Nadie a esta hora, y el pan del dia anterior sin recoger sobre la tabla.',
     cerrar: [
-      ['Menos mal. Manana amaso menos y no me sobra medio horno.',
+      ['Menos mal. Mañana amaso menos y no me sobra medio horno.',
         'Si te levantas temprano te guardo un pan de los buenos.'],
       ['Ya han bajado a por el. Tu recado ha valido mas que mis gritos.',
         'Que no te falte pan en el camino.'],
@@ -176,7 +176,7 @@ const TEMAS = [
       ['Rajada esta, y eso no se suelda: se funde otra vez de nuevo.',
         'Cobre y estano, y un horno que aqui no tenemos. Malas noticias llevas.'],
     ],
-    llegada: 'Desde aqui se oye tocar: un golpe seco, sin cola. Suena a lena, no a bronce.',
+    llegada: 'Desde aqui se oye tocar: un golpe seco, sin cola. Suena a leña, no a bronce.',
     cerrar: [
       ['Fundirla de nuevo... Su Majestad paga cupulas, no campanas.',
         'Rezaremos con la voz, que sale gratis. Gracias, caminante.'],
@@ -212,7 +212,7 @@ const TEMAS = [
     motivo: 'el viernes hay que dar de comer a toda la obra',
     pedir: [
       ['Viernes, y con truchas de los arroyos de la sierra hasta arriba.',
-        'Lo que no se venda hoy manana ni regalado. Avisa en el horno.'],
+        'Lo que no se venda hoy mañana ni regalado. Avisa en el horno.'],
       ['Media obra come de vigilia y nadie ha venido a encargarme nada.',
         'Ve a por quien reparte, que el pescado no espera.'],
     ],
@@ -225,7 +225,7 @@ const TEMAS = [
       ['Cerrado el trato. Hoy no tiro ni una trucha.',
         'La proxima vez te guardo la mejor del cesto.'],
       ['Con eso salvo el dia. Gracias, y anda con Dios.',
-        'Frescas de esta manana, no lo olvides.'],
+        'Frescas de esta mañana, no lo olvides.'],
     ],
   },
   {
@@ -269,13 +269,13 @@ const TEMAS = [
     recado: [
       ['Yo subo con el ganado y se por donde se pasa y por donde no.',
         'Por la vereda de arriba se puede, pero de uno en uno y sin carga.'],
-      ['Con nieve el monte cambia: lo llano engana y la vaguada se traga un buey.',
+      ['Con nieve el monte cambia: lo llano engaña y la vaguada se traga un buey.',
         'Que esperen al deshielo, es lo que digo yo y lo que dira el tiempo.'],
     ],
     llegada: 'La rodada se pierde bajo la nieve. Mas arriba no ha pasado nadie hoy.',
     cerrar: [
       ['De uno en uno y sin carga, entonces. Menos es nada.',
-        'La piedra esperara. Lleva ahi un millon de anos, no tiene prisa.'],
+        'La piedra esperara. Lleva ahi un millon de años, no tiene prisa.'],
       ['Pues a descargar y subir a lomos, que el plazo no entiende de nieve.',
         'Anda con Dios, y no bajes por donde has subido.'],
     ],
@@ -288,7 +288,7 @@ const TEMAS = [
     pedir: [
       ['La cal no fragua bajo cero: se hiela el agua dentro y revienta la junta.',
         'Lo puesto esta semana habra que picarlo. Que lo sepan en {sitio}.'],
-      ['Mira la junta: se desmorona con la una. Eso es hielo, no mala mano.',
+      ['Mira la junta: se desmorona con la uña. Eso es hielo, no mala mano.',
         'Ve a decirlo, y que nadie mande levantar mas hasta que temple.'],
     ],
     recado: [
@@ -323,8 +323,8 @@ const TEMAS = [
     llegada: 'Trigo alto y vencido, y cuatro hoces para todo esto. No llegan.',
     cerrar: [
       ['Dos dias de zagales. Con eso salvo la mitad, que es mas que nada.',
-        'Este ano el pan sale caro. Aviso desde ya.'],
-      ['Bendita sea. Manana amaso con harina de este ano.',
+        'Este año el pan sale caro. Aviso desde ya.'],
+      ['Bendita sea. Mañana amaso con harina de este año.',
         'Guardame un pan, te lo has ganado.'],
     ],
   },
@@ -342,7 +342,7 @@ const TEMAS = [
     recado: [
       ['Un vado se rehace en un dia si hay sillares de desecho. Y los hay.',
         'Mandare a los peones cuando afloje. Con el agua asi no se trabaja.'],
-      ['Ya se llevo el de abajo hace dos anos. Y volvera a llevarselo.',
+      ['Ya se llevo el de abajo hace dos años. Y volvera a llevarselo.',
         'Se pone y se vuelve a poner. Es lo que tiene vivir junto a un arroyo.'],
     ],
     llegada: 'El agua pasa por encima del vado y arrastra ramas. Aqui no cruza nadie.',
@@ -356,13 +356,13 @@ const TEMAS = [
   {
     id: 'lena',
     A: 'fraile', B: 'pastora',
-    cuando: { estacion: ['otono'] },
-    motivo: 'no hay lena cortada para el invierno',
+    cuando: { estacion: ['otoño'] },
+    motivo: 'no hay leña cortada para el invierno',
     pedir: [
       ['Estamos en octubre y la lenera esta a medias. Aqui se hiela hasta el vino.',
         'Alguien que conozca el monte sabra donde queda roble caido por {sitio}.'],
       ['Los peones duermen fuera y el invierno de esta sierra no es de broma.',
-        'Sin lena, en enero se reza tiritando. Busca quien nos guie al monte.'],
+        'Sin leña, en enero se reza tiritando. Busca quien nos guie al monte.'],
     ],
     recado: [
       ['Roble caido hay, y de sobra, del viento de septiembre.',
@@ -372,7 +372,7 @@ const TEMAS = [
     cerrar: [
       ['Por escrito, otra vez. Todo en este sitio acaba en un pliego.',
         'Lo pedire. Y mientras, que quemen ramon, que Dios aprieta pero no ahoga.'],
-      ['Hay lena, entonces. Con eso me basta para dormir tranquilo.',
+      ['Hay leña, entonces. Con eso me basta para dormir tranquilo.',
         'Que no te falte lumbre este invierno, caminante.'],
     ],
   },
@@ -382,7 +382,7 @@ const TEMAS = [
 // tema no describan igual dos sitios distintos.
 const LLEGADA = [
   'Esto es {sitio}. A esta hora no hay mas que polvo y el eco de los mazos del dia.',
-  'Ya estas en {sitio}. Huele a granito recien partido y a lena.',
+  'Ya estas en {sitio}. Huele a granito recien partido y a leña.',
   '{sitio}. Un carro descargado a medias y nadie a quien preguntar.',
   'Has llegado a {sitio}. El Monasterio se ve desde aqui, tapando media sierra.',
   '{sitio}, y el camino real de Madrid pasando ahi al lado.',

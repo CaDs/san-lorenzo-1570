@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { World, vuela } from './world.js';
 import { DayNight } from './daynight.js';
+import { Sonido } from './sonido.js';
 import { Barra } from './ui.js';
 import { Player } from './player.js';
 import { Minimap } from './minimap.js';
@@ -146,7 +147,8 @@ addEventListener('resize', () => {
 let reloj = 0;
 
 // La barra de mandos. Se construye oculta y sale al entrar al pueblo.
-const barra = new Barra({ cielo, misiones });
+const sonido = new Sonido({ world, lugares, cielo });
+const barra = new Barra({ cielo, misiones, sonido });
 let ticBarra = 0;
 
 // La portada esta puesta desde el HTML, asi que el titulo se ve desde el primer
@@ -166,6 +168,9 @@ portada.addEventListener('click', () => {
   portada.classList.add('fuera');
   hud.style.visibility = 'visible';
   barra.verEn(true);               // la barra sale al entrar, no sobre el titulo
+  // El AudioContext, aqui dentro y en ningun otro sitio: fuera de un gesto del
+  // usuario el navegador lo devuelve suspendido y no arranca jamas.
+  sonido.arrancar();
   // En algunos contextos (extensiones, iframes) el bloqueo de puntero lanza.
   // Que no se pueda capturar el raton no es motivo para no entrar al juego.
   try { canvas.requestPointerLock(); } catch { /* se entra igual */ }
@@ -173,7 +178,7 @@ portada.addEventListener('click', () => {
 }, { once: true });
 
 Object.assign(window, { THREE, scene, camera, world, player, cielo, renderer,
-  vida, misiones, lugares, barra });
+  vida, misiones, lugares, barra, sonido });
 
 function paso(dt) {
   reloj += dt;
@@ -194,6 +199,7 @@ function paso(dt) {
   vida.hora = cielo.hour;          // y el rey solo se aparece de medianoche a las dos
   misiones.clima = cl;             // y hay encargos que solo salen con nieve o helada
   misiones.update(dt, player);
+  sonido.update(dt, player.pos, player.yaw);
   composer.render();
   minimapa.draw(player.pos, player.yaw);
   misiones.dibujar(hudCtx, W, H);      // despues del minimapa: no lo pisa
