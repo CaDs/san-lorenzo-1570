@@ -50,7 +50,7 @@ en el monte de verdad.
 | `player.js` | andar, correr, volar, colision contra fachadas |
 | `minimap.js` | pergamino de esquina |
 | `ambiente.js` | que deberia oirse, en numeros: puro, con su test de node |
-| `sonido.js` | el grafo de Web Audio: capas de ruido, bichos y la campana |
+| `sonido.js` | Web Audio: capas de ruido, bichos, sucesos y la campana |
 | `trees.js` | siete especies instanciadas, de la fresneda al piornal |
 | `trees.js` | arquetipos de encina y pino, instanciados |
 | `npcs.js` | vecinos, perros, gatos, vacas, ovejas, gallinas, pajaros y el rey |

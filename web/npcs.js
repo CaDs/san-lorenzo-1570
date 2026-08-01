@@ -16,12 +16,22 @@ const RANGE = 120.0;
 const RANGE2 = RANGE * RANGE;
 const TAU = Math.PI * 2;
 
-const N_VILLAGERS = 220;
+// 220 sobre 3,6 km2 con el filtro de 120 m dejaban el pueblo casi deshabitado:
+// en la calle mas concurrida se cruzaba uno cada veinte segundos. San Lorenzo en
+// 1570 es una obra con miles de peones alrededor de un caserio, o sea justo lo
+// contrario. Con 460 y el peso de arranque mucho mas cargado al nucleo, el centro
+// tiene gente y el termino no se queda vacio.
+const N_VILLAGERS = 460;
+// Y los del monte: pastores y cabreros que no pisan el pueblo. No andan por el
+// grafo de calles -alli arriba no hay calles-, sino a la querencia de su rebano.
+const N_PASTORES = 16;
+// El rey usa la ultima ranura de la malla de vecinos.
+const IDX_REY = N_VILLAGERS + N_PASTORES;
 const N_DOGS = 30;
-const N_SHEEP = 60;
+const N_SHEEP = 96;
 const N_CHICKENS = 70;
 const N_CATS = 34;
-const N_COWS = 26;
+const N_COWS = 40;
 const N_BIRDS = 24;
 
 // xorshift32 determinista, mismo estilo que rngFrom de world.js (no se
@@ -387,7 +397,10 @@ export class Vida {
     // termino vacio), las calles sin luz se quedan con un peso minimo fijo
     // -presencia real, pero minoritaria- en vez de cero.
     const density = buildDensity(world.data.buildings);
-    this.nodeW = nodes.map((nd) => (nd.lit ? (density(nd.x, nd.z) + 1) ** 1.5 : 0.15));
+    // ^2.4 en vez de ^1.5. Con 1.5 los 460 vecinos salian bastante repartidos por
+    // todo el termino y el centro no se notaba; el exponente es lo unico que
+    // decide cuanto tira el nucleo, y subirlo concentra sin dejar el resto vacio.
+    this.nodeW = nodes.map((nd) => (nd.lit ? (density(nd.x, nd.z) + 1) ** 2.4 : 0.15));
     this.nodeWTotal = this.nodeW.reduce((a, b) => a + b, 0);
 
     this._objetos = [];
@@ -458,7 +471,8 @@ export class Vida {
     // Una instancia mas que vecinos: la ultima es el rey, que usa el mismo
     // cuerpo pero con sus colores y siempre con capa y sombrero. Sale mas corto
     // que darle mallas propias y ademas se mueve con el mismo writeVillager().
-    const n = N_VILLAGERS + 1;
+    // Vecinos + pastores del monte + el rey, que va el ultimo.
+    const n = N_VILLAGERS + N_PASTORES + 1;
     const rng = rngFrom(4177);
 
     // Cabeza: mas ancha en el craneo que en la mandibula, con casquete de pelo.
@@ -543,14 +557,74 @@ export class Vida {
       this.villagers.push(w);
       this.ent.push(w);
     }
+
+    // --- los del monte -----------------------------------------------------
+    //
+    // Pastores y cabreros, arriba, donde no hay calles. Usan el mismo cuerpo y el
+    // mismo dialogo -o sea que se les puede hablar y dan encargos como cualquier
+    // vecino- pero no andan por el grafo: se mueven a la querencia de un punto
+    // fijo, que es su majada, igual que las ovejas.
+    //
+    // El sitio se sortea en un anillo alrededor del pueblo y se acepta solo si
+    // esta fuera del casco, por encima de los 1050 m y en cuesta llevadera: un
+    // pastor en un roquedo de 40 grados no es un pastor, es un accidente.
+    this.pastores = [];
+    if (this.world.sierra) {
+      const W = this.world;
+      for (let k = 0; k < N_PASTORES; k++) {
+        const i = N_VILLAGERS + k;
+        let sitio = null;
+        for (let t = 0; t < 200 && !sitio; t++) {
+          const ang = rng.randf() * TAU;
+          const r = 600 + rng.randf() * 1500;
+          const x = 1800 + Math.cos(ang) * r, z = 1050 + Math.sin(ang) * r;
+          if (W.dentroDelCasco(x, z) > -40) continue;
+          const y = W.heightAt(x, z);
+          if (y < 1050 || y > 1650) continue;
+          if (W.normalAt(x, z)[1] < 0.80) continue;
+          sitio = [x, z];
+        }
+        if (!sitio) continue;
+        // 3 = pastora. Es el oficio que el juego ya tiene para esto, con sus
+        // frases y sus encargos.
+        const role = 3;
+        colTorso.set(ROLE_COL[role], i * 3);
+        const tono = 0.80 + rng.randf() * 0.42;
+        colPiel.set([tono, tono * 0.98, tono * 0.96], i * 3);
+        colPelo.set(PELO[rng.randi_range(0, PELO.length - 1)], i * 3);
+        colHat.set(HAT_COL[role], i * 3);
+        colTool.set(TOOL_COL[role], i * 3);
+        const w = {
+          id: i, tipo: 'vecino', role, monte: true,
+          nombre: nombreDe(role, porOficio[role]++),
+          // Arriba no se meten en casa: no la tienen a mano. `calle` a 0 los deja
+          // fuera con cualquier tiempo, que es lo que hace un pastor.
+          calle: 0,
+          home: sitio, target: [sitio[0], sitio[1]], t: 1, paused: rng.randf() * 5,
+          speed: 0.7 + rng.randf() * 0.4,
+          phase: rng.randf() * TAU,
+          cloak: 1,                       // arriba hace frio siempre
+          hat: 1,
+          tool: 1,                        // el cayado
+          talla: 0.92 + rng.randf() * 0.15,
+          pos: new THREE.Vector3(sitio[0], 0, sitio[1]),
+          yaw: rng.randf() * TAU,
+          walking: 0,
+          rng,
+        };
+        this.pastores.push(w);
+        this.villagers.push(w);
+        this.ent.push(w);
+      }
+    }
     // El rey, en la ultima instancia. De negro entero, que es como vestia y como
     // se le pinta siempre; el contraste lo pone la gorguera, que va en su propia
     // malla porque no hay ninguna pieza del vecino que sirva de cuello.
-    colTorso.set(REY_NEGRO, N_VILLAGERS * 3);
-    colPiel.set([0.86, 0.84, 0.80], N_VILLAGERS * 3);    // palido, y a la luna mas
-    colPelo.set([0.055, 0.045, 0.040], N_VILLAGERS * 3);
-    colHat.set(REY_NEGRO, N_VILLAGERS * 3);
-    colTool.set([0, 0, 0], N_VILLAGERS * 3);             // no lleva apero
+    colTorso.set(REY_NEGRO, IDX_REY * 3);
+    colPiel.set([0.86, 0.84, 0.80], IDX_REY * 3);    // palido, y a la luna mas
+    colPelo.set([0.055, 0.045, 0.040], IDX_REY * 3);
+    colHat.set(REY_NEGRO, IDX_REY * 3);
+    colTool.set([0, 0, 0], IDX_REY * 3);             // no lleva apero
 
     this.vTorso.instanceColor = new THREE.InstancedBufferAttribute(colTorso, 3);
     this.vHead.instanceColor = new THREE.InstancedBufferAttribute(colPiel, 3);
@@ -581,7 +655,7 @@ export class Vida {
     const rng = rngFrom(1527);        // el ano en que nacio
     const c = this.lonja();
     this.rey = {
-      id: N_VILLAGERS, tipo: 'rey', role: -1, nombre: 'El hombre de negro',
+      id: IDX_REY, tipo: 'rey', role: -1, nombre: 'El hombre de negro',
       centro: c, pos: new THREE.Vector3(c.x, 0, c.z),
       destino: null, paused: 0, speed: 0.9, phase: 0, yaw: 0, walking: 0,
       talla: 1.02, hat: 1, cloak: 1, tool: 0, calle: -1, rng,
@@ -801,7 +875,15 @@ export class Vida {
       // ponytail: en vez de buscar dehesa real, se sortea el mapa entero y se
       // filtra con freeAround (deja fuera casas y calles); techo: si hiciera
       // falta agruparlas en un prado concreto, sembrar cerca de un punto fijo.
+      // Un tercio del rebano sube al monte, con su pastor. Un pastor sin ovejas
+      // es un hombre parado en una ladera, y era exactamente lo que se veia.
       let home = null;
+      const conPastor = this.pastores && this.pastores.length && i % 3 === 0;
+      if (conPastor) {
+        const pas = this.pastores[(i / 3 | 0) % this.pastores.length];
+        home = [pas.home[0] + (rng.randf() - 0.5) * 34,
+          pas.home[1] + (rng.randf() - 0.5) * 34];
+      }
       for (let t = 0; t < 40 && !home; t++) {
         home = this.freeNear(rng.randf() * sx, rng.randf() * sz, 1, rng, 1);
       }
@@ -1130,6 +1212,9 @@ export class Vida {
       // -o sea plantado en mitad de la calle sin mover los pies-. Hundido bajo
       // el terreno no se ve, y volver a salir es una linea.
       if (w.calle > this.fuera) { this.writeVillager(w, true); nV++; continue; }
+      // El del monte no tiene calle por la que ir: se mueve a la querencia de su
+      // majada, con el mismo paso que una oveja pero con mas radio.
+      if (w.monte) { this.stepWander(w, dt, 22, 6); this.writeVillager(w); nV++; continue; }
       this.stepGraphWalker(w, dt, 0.3, 3.0);
       this.writeVillager(w);
       nV++;

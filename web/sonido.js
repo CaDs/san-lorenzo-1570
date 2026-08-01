@@ -80,7 +80,8 @@ export class Sonido {
     this.ultima = null;              // que hora del oficio sono la ultima vez
     this.capas = {};
     this.bichos = {};
-    this.proximo = { pajaros: 0, ganado: 0, fragua: 0, obra: 0 };
+    this.proximo = { pajaros: 0, fragua: 0, obra: 0,
+      perro: 0, vaca: 0, oveja: 0, gallina: 0 };
     this.g = {};                     // la ultima mezcla, para que la vea la barra
   }
 
@@ -142,20 +143,70 @@ export class Sonido {
     return { o, bp, am, lfo, prof, g };
   }
 
-  // Un golpe corto: mazo en la piedra, martillo en el yunque, pico de pajaro.
-  // Todo lo transitorio lleva su stop(), sin excepcion.
-  golpecito(freq, dur, vol, tipo = 'triangle') {
-    const ctx = this.ctx, t = ctx.currentTime + 0.01;
-    const o = ctx.createOscillator();
-    o.type = tipo;
-    o.frequency.setValueAtTime(freq, t);
-    o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.55), t + dur);
-    const e = ctx.createGain();
-    e.gain.setValueAtTime(0, t);
-    e.gain.linearRampToValueAtTime(vol, t + 0.005);
-    e.gain.setTargetAtTime(0, t + 0.005, dur / 3);
-    o.connect(e); e.connect(this.master);
-    o.start(t); o.stop(t + dur + 0.2);
+  // Un sonido de verdad, no un pitido.
+  //
+  // Aqui estaba el fallo de la primera version: los sucesos eran osciladores
+  // sueltos con una envolvente corta, y un oscilador corto ES un pitido. Un
+  // ladrido, un mugido o un mazo en la piedra no son tonos: son RUIDO metido por
+  // un filtro que se mueve. Lo que hace que suene a bicho y no a alarma es la
+  // banda -donde esta la energia- y como se desliza, no la nota.
+  //
+  //   f0/f1   por donde arranca y donde acaba el filtro (Hz)
+  //   Q       lo cerrado que va. Bajo = soplo, alto = casi un tono
+  //   dur     segundos
+  //   vol     ganancia de pico
+  //   tono    cuanta parte lleva de cuerda vocal (0 = solo aire)
+  //   trem    tremolo en Hz, para el balido y el mugido
+  sonar({ f0, f1, Q, dur, vol, tono = 0, trem = 0, ataque = 0.012, retraso = 0 }) {
+    const ctx = this.ctx, t = ctx.currentTime + 0.02 + retraso;
+    const salida = ctx.createGain();
+    salida.gain.setValueAtTime(0, t);
+    salida.gain.linearRampToValueAtTime(vol * this.vol, t + ataque);
+    salida.gain.setValueAtTime(vol * this.vol, t + dur * 0.55);
+    salida.gain.setTargetAtTime(0, t + dur * 0.55, dur / 4);
+    salida.connect(this.master);
+
+    // El aire: ruido blanco por un pasabanda que se desliza de f0 a f1. Eso solo
+    // ya es un ladrido; el resto es matiz.
+    const n = ctx.createBufferSource();
+    n.buffer = this.ruido();
+    n.loop = true;
+    // Cada golpe entra por un sitio distinto del buffer, o los cuarenta ladridos
+    // de la partida son el mismo ladrido calcado.
+    n.loopStart = Math.random() * 3.5;
+    n.loopEnd = n.loopStart + 0.4;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = Q;
+    bp.frequency.setValueAtTime(f0, t);
+    bp.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+    n.connect(bp); bp.connect(salida);
+    n.start(t, n.loopStart);
+    n.stop(t + dur + 0.25);
+
+    // Y la cuerda vocal, cuando la hay. Una vaca es sobre todo esto y un mazo en
+    // la piedra no lleva nada.
+    if (tono > 0) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 0.5, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(25, f1 * 0.5), t + dur);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = f0 * 2.2;
+      const g = ctx.createGain();
+      g.gain.value = tono;
+      o.connect(lp); lp.connect(g); g.connect(salida);
+      o.start(t); o.stop(t + dur + 0.25);
+    }
+
+    // El temblor de un balido o de un mugido largo.
+    if (trem > 0) {
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine'; lfo.frequency.value = trem;
+      const prof = ctx.createGain();
+      prof.gain.value = vol * this.vol * 0.45;
+      lfo.connect(prof); prof.connect(salida.gain);
+      lfo.start(t); lfo.stop(t + dur + 0.25);
+    }
   }
 
   // Dentro del gesto del usuario, no antes. Ver la cabecera.
@@ -261,6 +312,8 @@ export class Sonido {
   }
 
   // Toda la hora del oficio: tres golpes espaciados, programados de una vez. Se
+
+  // Toda la hora del oficio: tres golpes espaciados, programados de una vez. Se
   // programan en el reloj del audio, no con setTimeout: un setTimeout llega
   // cuando el navegador puede, y en un fotograma largo la campanada se descoloca
   // veinte milisegundos y se oye.
@@ -330,27 +383,74 @@ export class Sonido {
 
     // --- lo que pasa a ratos -------------------------------------------------
     //
-    // Pajaros, ganado, fragua y mazos no son capas: son sucesos. La ganancia de
-    // ambiente.js se lee aqui como FRECUENCIA -mas ganancia, mas seguido- y no
-    // como volumen, que es lo que hace que un pajaro suene a pajaro y no a
-    // zumbido continuo. Los nodos se crean en el suceso, no en el fotograma, y
-    // cada uno se para solo.
-    this.suceso('pajaros', dt, g.pajaros, 0.9, () => {
-      const f = 2400 + 1800 * Math.random();
-      this.golpecito(f, 0.07 + Math.random() * 0.06, 0.05 + g.pajaros, 'sine');
+    // Un bicho suena si ESE bicho esta cerca. `vida.cerca` son los que han pasado
+    // el filtro de 120 m, o sea los que se ven; sin esa condicion el pueblo
+    // ladraba en mitad de la dehesa y mugia dentro de la lonja, que es lo que
+    // convierte un ambiente en una pista de fondo.
+    //
+    // Y la ganancia de ambiente.js se lee como FRECUENCIA, no como volumen: mas
+    // ganancia es mas seguido, no mas fuerte. Un perro no ladra mas flojo porque
+    // este lejos de la plaza, ladra menos veces.
+    const v = this.vida ? this.vida.cerca : null;
+    const hay = (k) => (v && v[k]) || 0;
+    const deDia = this.cielo.dia ?? 1;
+
+    // El perro. Dos o tres ladridos seguidos, que es como ladra un perro: uno
+    // solo suena a efecto de sonido.
+    this.suceso('perro', dt, Math.min(hay('perros') * 0.35, 1) * (0.35 + 0.65 * deDia), 11, () => {
+      // Los tres se programan de una vez en el reloj del audio, no con
+      // setTimeout: un setTimeout puede llegar despues de que el contexto se
+      // haya ido, y ademas se descoloca en un fotograma largo.
+      const n = 2 + ((Math.random() * 2) | 0);
+      for (let i = 0; i < n; i++) {
+        this.sonar({ f0: 620 + Math.random() * 260, f1: 330, Q: 2.6,
+          dur: 0.16, vol: 0.16, tono: 0.35, retraso: i * (0.17 + Math.random() * 0.09) });
+      }
     });
-    this.suceso('ganado', dt, g.ganado, 7.0, () => {
-      this.golpecito(190 + 60 * Math.random(), 0.55, 0.10 + g.ganado, 'sawtooth');
+
+    // La vaca: grave, larga y con temblor. Es el sonido mas lento de todos.
+    this.suceso('vaca', dt, Math.min(hay('vacas') * 0.5, 1) * g.ganado * 8, 16, () => {
+      this.sonar({ f0: 190, f1: 130, Q: 3.2, dur: 1.3, vol: 0.20, tono: 0.55,
+        trem: 5.5, ataque: 0.12 });
     });
-    this.suceso('fragua', dt, g.fragua, 1.1, () => {
-      this.golpecito(1900 + 400 * Math.random(), 0.28, 0.05 + g.fragua, 'square');
+
+    // La oveja: mas aguda que la vaca y con el temblor mucho mas rapido, que es
+    // literalmente lo que distingue un balido de un mugido.
+    this.suceso('oveja', dt, Math.min(hay('ovejas') * 0.25, 1) * g.ganado * 8, 9, () => {
+      this.sonar({ f0: 640, f1: 520, Q: 4.5, dur: 0.55, vol: 0.13, tono: 0.4,
+        trem: 17, ataque: 0.05 });
     });
-    // La obra: la labra es el mazo a cubierto y el asiento la cabria y el tajo.
-    // Con helada suena la primera y no la segunda, y eso se oye.
-    this.suceso('obra', dt, g.labra + g.asiento, 0.7, () => {
-      const asiento = Math.random() < g.asiento / Math.max(g.labra + g.asiento, 1e-6);
-      this.golpecito(asiento ? 320 : 880, asiento ? 0.35 : 0.13,
-        0.06 + g.labra, 'triangle');
+
+    this.suceso('gallina', dt, Math.min(hay('gallinas') * 0.12, 1) * deDia, 13, () => {
+      this.sonar({ f0: 1500, f1: 900, Q: 5.0, dur: 0.22, vol: 0.07, tono: 0.25, trem: 22 });
+    });
+
+    // El pajaro es un TRINO: la banda sube y baja deprisa dentro del ruido. Un
+    // seno con envolvente corta, que es lo que habia antes, es un pitido de
+    // microondas. Aqui no hay tono ninguno, solo aire por un filtro estrecho.
+    this.suceso('pajaros', dt, g.pajaros, 1.6, () => {
+      const alto = Math.random() < 0.5;
+      this.sonar({ f0: alto ? 3100 : 2300, f1: alto ? 4600 : 3300, Q: 14,
+        dur: 0.06 + Math.random() * 0.05, vol: 0.05, ataque: 0.006 });
+    });
+
+    // La fragua: el martillo en el yunque es lo unico de todo esto que SI es
+    // medio tonal, porque el yunque canta. Pero corto y con mucho aire encima.
+    this.suceso('fragua', dt, g.fragua, 1.4, () => {
+      this.sonar({ f0: 2600, f1: 1800, Q: 9, dur: 0.22, vol: 0.06, tono: 0.18,
+        ataque: 0.004 });
+    });
+
+    // La obra. El mazo en la piedra no tiene nota: es un golpe seco y ancho. Y la
+    // cabria y el tajo del asiento, mas graves y mas largos. Con helada suena el
+    // primero y no el segundo, que es lo que se decidio en ambiente.js.
+    this.suceso('obra', dt, g.labra + g.asiento, 0.8, () => {
+      const total = Math.max(g.labra + g.asiento, 1e-6);
+      if (Math.random() < g.asiento / total) {
+        this.sonar({ f0: 420, f1: 190, Q: 1.4, dur: 0.5, vol: 0.09, ataque: 0.02 });
+      } else {
+        this.sonar({ f0: 1700, f1: 700, Q: 1.1, dur: 0.13, vol: 0.09, ataque: 0.003 });
+      }
     });
   }
 
