@@ -7,12 +7,15 @@
 //
 // Un encargo = una FORMA (el arco: quien te manda, cuantas patas tiene) + un
 // TEMA (de que va) + huecos rellenados con los oficios que hay VIVOS ahora
-// mismo y con los sitios con nombre de verdad que trae OSM. 4 formas x 8 temas
+// mismo y con los sitios con nombre de verdad que trae OSM. 10 formas x 8 temas
 // x 8 oficios x 69 sitios da mas combinaciones que partidas va a jugar nadie,
 // y sale de unas cien lineas de plantilla.
 //
-// Determinista a partir de `semilla`: con ?seed=1234 vuelve a salir el mismo
-// encargo. Sin eso un generador no se puede depurar ni contar a nadie.
+// Y no se acaban: se pide el encargo numero n cuando se ha cerrado el n-1, en
+// vez de fabricar tres al arrancar y dejar la partida sin nada que hacer.
+//
+// Determinista a partir de `semilla`: con ?seed=1234 vuelve a salir la misma
+// ristra. Sin eso un generador no se puede depurar ni contar a nadie.
 //
 // Nada de THREE ni de npcs.js aqui: solo (x,z) y texto. Asi esto se puede
 // probar con node (ver quests.test.mjs).
@@ -37,11 +40,22 @@ const MARGEN = 60;        // m que hay que andar de mas para no nacer ya llegand
 // 'pedir' te lo encarga A, 'recado' lo recibe B, 'ir' es llegar al siguiente
 // sitio, 'cerrar' es volver con A. La cuarta empieza en frio: llegas al pueblo
 // habiendo oido algo y buscas a quien preguntarle.
+//
+// El arco es estructura pura: no gasta ni una linea de texto, asi que es el eje
+// mas barato para que dos encargos del mismo tema no se anden igual. La unica
+// regla es que 'pedir' y 'cerrar' -que resuelve la MISMA persona- nunca queden
+// pegados, o el segundo se cerraria sin moverse del sitio.
 const FORMAS = [
   ['pedir', 'recado', 'cerrar'],
   ['pedir', 'ir', 'cerrar'],
   ['pedir', 'ir', 'recado', 'cerrar'],
   ['ir', 'pedir', 'ir'],
+  ['pedir', 'ir', 'ir', 'cerrar'],
+  ['pedir', 'recado', 'ir', 'cerrar'],
+  ['ir', 'pedir', 'recado', 'cerrar'],
+  ['ir', 'pedir', 'ir', 'cerrar'],
+  ['pedir', 'ir', 'recado'],
+  ['pedir', 'recado', 'ir'],
 ];
 
 // --- temas -------------------------------------------------------------------
@@ -49,6 +63,13 @@ const FORMAS = [
 // `A` es el oficio que encarga y `B` el que recibe el recado: son PREFERENCIAS,
 // no obligaciones. Si a esa hora no anda ningun fraile por la calle se cambia
 // por otro oficio vivo, que es mejor que un objetivo imposible.
+//
+// `cuando` es opcional y filtra por estacion y por tiempo. Los ocho de siempre
+// NO lo llevan, y esa es justamente la garantia de que nunca te quedas sin
+// encargo: la lista filtrada tiene siempre al menos ocho temas dentro, se mire
+// el dia que se mire. La regla que hay que respetar al anadir es "no le pongas
+// `cuando` a un tema que ya existe", no "pon un remedio por si acaso": un
+// remedio para un caso que no puede pasar es una rama que nadie vuelve a leer.
 //
 // Huecos: {A} {B} {sitio} {rumbo} {pasos}. Epoca: anos setenta del XVI, con las
 // obras del Monasterio en marcha.
@@ -229,6 +250,132 @@ const TEMAS = [
         'Ve en paz, y no te pierdas al bajar.'],
     ],
   },
+
+  // --- los que solo salen cuando toca --------------------------------------
+  //
+  // Estos SI llevan `cuando`. Son la razon de que enero no se juegue igual que
+  // agosto: no es el mismo encargo con otra luz, es otro encargo.
+  {
+    id: 'carretas',
+    A: 'cantero', B: 'pastora',
+    cuando: { clima: ['nieve'], cubierta: 0.25 },
+    motivo: 'la nieve ha cortado el camino de los carros de la piedra',
+    pedir: [
+      ['Con este palmo de nieve los bueyes no suben la cuesta cargados.',
+        'Sube hasta {sitio} y mira si se puede rodear por arriba.'],
+      ['Tres carros parados desde el alba y la obra sin sillares que labrar.',
+        'Alguien que conozca el monte tiene que decirnos por donde se pasa.'],
+    ],
+    recado: [
+      ['Yo subo con el ganado y se por donde se pasa y por donde no.',
+        'Por la vereda de arriba se puede, pero de uno en uno y sin carga.'],
+      ['Con nieve el monte cambia: lo llano engana y la vaguada se traga un buey.',
+        'Que esperen al deshielo, es lo que digo yo y lo que dira el tiempo.'],
+    ],
+    llegada: 'La rodada se pierde bajo la nieve. Mas arriba no ha pasado nadie hoy.',
+    cerrar: [
+      ['De uno en uno y sin carga, entonces. Menos es nada.',
+        'La piedra esperara. Lleva ahi un millon de anos, no tiene prisa.'],
+      ['Pues a descargar y subir a lomos, que el plazo no entiende de nieve.',
+        'Anda con Dios, y no bajes por donde has subido.'],
+    ],
+  },
+  {
+    id: 'helada',
+    A: 'cantero', B: 'fraile',
+    cuando: { helada: true },
+    motivo: 'la helada ha reventado la cal recien puesta',
+    pedir: [
+      ['La cal no fragua bajo cero: se hiela el agua dentro y revienta la junta.',
+        'Lo puesto esta semana habra que picarlo. Que lo sepan en {sitio}.'],
+      ['Mira la junta: se desmorona con la una. Eso es hielo, no mala mano.',
+        'Ve a decirlo, y que nadie mande levantar mas hasta que temple.'],
+    ],
+    recado: [
+      ['¿Picar lo puesto? Su Majestad pregunta cada mes por que no sube la obra.',
+        'Se lo escribire. Y rezare, que contra la escarcha es lo unico que tengo.'],
+      ['Ya lo dijo el maestro: de noviembre a marzo no se asienta sillar.',
+        'Nadie hace caso hasta que revienta. Ve con Dios.'],
+    ],
+    llegada: 'Escarcha en las juntas y un cubo de agua con costra. Aqui no ha fraguado nada.',
+    cerrar: [
+      ['Ya lo sabia yo. Al menos ahora esta dicho y no es culpa mia.',
+        'En marzo se levanta el doble. El invierno se pierde y punto.'],
+      ['Que pare la obra, entonces. Es lo suyo, aunque cueste decirlo.',
+        'La piedra aguanta. La cal no. Acuerdate de eso.'],
+    ],
+  },
+  {
+    id: 'siega',
+    A: 'panadera', B: 'pastora',
+    cuando: { estacion: ['verano'] },
+    motivo: 'se siega en el ejido y no hay brazos, que estan todos en la obra',
+    pedir: [
+      ['La mies se pasa mientras los hombres cobran jornal cargando granito.',
+        'Si el grano se pierde, en invierno no hay pan. Habla en {sitio}.'],
+      ['Cuatro segadores para todo el ejido, y el trigo ya se vence solo.',
+        'Busca quien tenga gente y ganas. Se paga lo que pida.'],
+    ],
+    recado: [
+      ['Yo bajo el ganado despues de la siega y lo meto en el rastrojo.',
+        'Puedo mandar a los zagales dos dias. Mas no, que las ovejas no esperan.'],
+    ],
+    llegada: 'Trigo alto y vencido, y cuatro hoces para todo esto. No llegan.',
+    cerrar: [
+      ['Dos dias de zagales. Con eso salvo la mitad, que es mas que nada.',
+        'Este ano el pan sale caro. Aviso desde ya.'],
+      ['Bendita sea. Manana amaso con harina de este ano.',
+        'Guardame un pan, te lo has ganado.'],
+    ],
+  },
+  {
+    id: 'riada',
+    A: 'aguador', B: 'cantero',
+    cuando: { clima: ['lluvia', 'tormenta'] },
+    motivo: 'el arroyo baja crecido y se ha llevado el paso',
+    pedir: [
+      ['El arroyo se ha comido las piedras del vado en una noche.',
+        'Sin paso no hay agua ni cal en la obra. Mira como esta por {sitio}.'],
+      ['Baja turbio y con ramas. Asi no se llena un cantaro ni se cruza.',
+        'Que lo vea quien sepa de piedra, antes de que se lleve algo mas.'],
+    ],
+    recado: [
+      ['Un vado se rehace en un dia si hay sillares de desecho. Y los hay.',
+        'Mandare a los peones cuando afloje. Con el agua asi no se trabaja.'],
+      ['Ya se llevo el de abajo hace dos anos. Y volvera a llevarselo.',
+        'Se pone y se vuelve a poner. Es lo que tiene vivir junto a un arroyo.'],
+    ],
+    llegada: 'El agua pasa por encima del vado y arrastra ramas. Aqui no cruza nadie.',
+    cerrar: [
+      ['Con sillares de desecho, dices. Pues que sirvan de algo los rotos.',
+        'En cuanto baje, se pone. Gracias por el recado.'],
+      ['Lo que yo digo: el que manda es el arroyo, no Su Majestad.',
+        'Que no te pille en el vado, caminante.'],
+    ],
+  },
+  {
+    id: 'lena',
+    A: 'fraile', B: 'pastora',
+    cuando: { estacion: ['otono'] },
+    motivo: 'no hay lena cortada para el invierno',
+    pedir: [
+      ['Estamos en octubre y la lenera esta a medias. Aqui se hiela hasta el vino.',
+        'Alguien que conozca el monte sabra donde queda roble caido por {sitio}.'],
+      ['Los peones duermen fuera y el invierno de esta sierra no es de broma.',
+        'Sin lena, en enero se reza tiritando. Busca quien nos guie al monte.'],
+    ],
+    recado: [
+      ['Roble caido hay, y de sobra, del viento de septiembre.',
+        'Pero es monte del Rey. Que lo pidan por escrito o no cortan nada.'],
+    ],
+    llegada: 'Roble caido de la ventisca de septiembre, y nadie lo ha tocado.',
+    cerrar: [
+      ['Por escrito, otra vez. Todo en este sitio acaba en un pliego.',
+        'Lo pedire. Y mientras, que quemen ramon, que Dios aprieta pero no ahoga.'],
+      ['Hay lena, entonces. Con eso me basta para dormir tranquilo.',
+        'Que no te falte lumbre este invierno, caminante.'],
+    ],
+  },
 ];
 
 // Narracion generica al llegar a un sitio, para que dos encargos con el mismo
@@ -244,31 +391,51 @@ const LLEGADA = [
 
 // --- generacion --------------------------------------------------------------
 
-// Devuelve la lista PLANA de pasos de `cuantos` encargos seguidos. Se generan de
-// golpe al arrancar y no sobre la marcha: asi la partida entera depende de una
-// sola semilla y se puede repetir.
-export function generarEncargos(semilla, lugares, vida, origen, cuantos = 3) {
-  const out = [];
-  for (let i = 0; i < cuantos; i++) {
-    // Varios intentos por encargo: si los huecos no se pueden rellenar (no hay
-    // oficios vivos, no hay sitios lejanos) se prueba con otra tirada antes de
-    // rendirse, en vez de dejar la partida sin mision.
-    for (let t = 0; t < 6; t++) {
-      const e = unEncargo(mezcla(semilla, i, t), lugares, vida, origen);
-      // En la costura entre dos encargos manda la misma regla que dentro de uno:
-      // si el que cierra el anterior es del mismo oficio que el que encarga el
-      // siguiente, el vecino que tienes delante te da los dos y no has andado.
-      const previo = out.length ? out[out.length - 1].oficio : null;
-      if (e && (!e[0].oficio || e[0].oficio !== previo)) { out.push(...e); break; }
-    }
+// Los pasos del encargo numero `n`, o null si no hay manera de armarlo. Se pide
+// uno cada vez, cuando se acaba el anterior, y no tres de golpe al arrancar: asi
+// los encargos no se terminan nunca.
+//
+// La semilla de cada uno sigue siendo mezcla(semilla, n, intento), que es lo que
+// era, de modo que ?seed= sigue dando la misma partida que antes: lo unico que
+// cambia es que ahora hay encargo numero 4.
+//
+// `oficioPrevio` es el oficio del ultimo paso del encargo anterior. En la costura
+// entre dos encargos manda la misma regla que dentro de uno: si el que cierra el
+// anterior tiene el oficio del que encarga el siguiente, el vecino que tienes
+// delante te da los dos y no has andado.
+export function siguienteEncargo(semilla, n, lugares, vida, origen,
+  oficioPrevio = null, clima = null) {
+  // Varios intentos: si los huecos no se pueden rellenar (no hay oficios vivos,
+  // no hay sitios lejanos) se prueba con otra tirada antes de rendirse.
+  for (let t = 0; t < 6; t++) {
+    const e = unEncargo(mezcla(semilla, n, t), lugares, vida, origen, n, clima);
+    if (e && (!e[0].oficio || e[0].oficio !== oficioPrevio)) return e;
   }
-  return out;
+  return null;
 }
 
-function unEncargo(s, lugares, vida, origen) {
+// Si un tema tiene sentido con el tiempo que hace. Un tema sin `cuando` vale
+// siempre, que es lo que hace imposible quedarse sin ninguno.
+function valeAhora(tema, clima) {
+  const c = tema.cuando;
+  if (!c) return true;
+  if (!clima) return false;      // sin saber el tiempo, solo valen los de siempre
+  if (c.estacion && !c.estacion.includes(clima.estacion)) return false;
+  if (c.clima && !c.clima.includes(clima.estado)) return false;
+  if (c.cubierta !== undefined && clima.cubierta < c.cubierta) return false;
+  if (c.helada && !clima.helada) return false;
+  return true;
+}
+
+function unEncargo(s, lugares, vida, origen, n, clima) {
   const dado = hacerDado(s);
-  const forma = elige(FORMAS, dado);
-  const tema = elige(TEMAS, dado);
+  const forma = elige(FORMAS, dado, CANAL.forma);
+  // Se filtra ANTES de tirar, no despues. El dado usa los bits altos sobre la
+  // longitud de la lista y es insesgado para cualquier n, asi que una lista de
+  // longitud variable no lo rompe; sortear y luego descartar si, porque habria
+  // que volver a tirar y las tiradas repetidas son las que sesgan.
+  const posibles = TEMAS.filter((t) => valeAhora(t, clima));
+  const tema = elige(posibles, dado, CANAL.tema);
 
   const A = oficioVivo(tema.A, vida, origen, dado, null);
   const B = oficioVivo(tema.B, vida, origen, dado, A);
@@ -277,6 +444,9 @@ function unEncargo(s, lugares, vida, origen) {
   // Siempre se saca al menos un sitio: aunque la forma no tenga paso 'ir', las
   // plantillas pueden nombrarlo ("pasa por {sitio}").
   const cuantos = Math.max(1, forma.filter((k) => k === 'ir').length);
+  // Buscar sitio es un bucle que descarta y vuelve a tirar, asi que gasta un
+  // numero de tiradas que depende de la semilla. Da igual: va por su canal y no
+  // desplaza las tiradas de nadie.
   const sitios = sitiosLejanos(lugares, dado, origen, cuantos);
   if (!sitios.length) return null;
 
@@ -289,39 +459,52 @@ function unEncargo(s, lugares, vida, origen) {
   let iSitio = 0;
   return forma.map((kind) => {
     const sitio = sitios[Math.min(iSitio, sitios.length - 1)];
+    // `tema.llegada` cuenta lo que hay que ver -las huellas de lobo, el pilon
+    // turbio- y eso pasa UNA vez. En un arco con dos 'ir' se leia igual en los
+    // dos sitios, que son sitios distintos.
+    const primeraLlegada = iSitio === 0;
     if (kind === 'ir') iSitio++;
     const quien = kind === 'recado' ? B : A;
     const voz = (lineas) => lineas.map((t) => [cap(quien), rellena(t, sitio)]);
 
+    // `rol` y `encargo` son lo que permite atar un paso a la PERSONA que lo
+    // resolvio: 'pedir' y 'cerrar' son los dos rol 'A' del mismo encargo, asi
+    // que el que cierra tiene que ser el mismo vecino que te lo encargo, no
+    // cualquiera de los 27 de su oficio. `quien` es el trozo del objetivo que se
+    // sustituye por su nombre en cuanto se sabe cual es.
+    //
+    // Los objetivos se escriben con "con" y "para", que no se contraen: "vuelve
+    // con el cantero" y "vuelve con Anton el cantero" valen los dos, mientras
+    // que "vuelve a el cantero" no vale ninguno de los dos.
     switch (kind) {
       case 'pedir':
         return {
-          oficio: A,
-          objetivo: `Busca ${al(A)}: dicen que ${tema.motivo}.`,
-          dialogo: voz(elige(tema.pedir, dado)),
+          oficio: A, rol: 'A', encargo: n, quien: el(A),
+          objetivo: `Habla con ${el(A)}: dicen que ${tema.motivo}.`,
+          dialogo: voz(elige(tema.pedir, dado, CANAL.pedir)),
         };
       case 'recado':
         return {
-          oficio: B,
-          objetivo: `Lleva el recado ${al(B)}.`,
-          dialogo: voz(elige(tema.recado, dado)),
+          oficio: B, rol: 'B', encargo: n, quien: el(B),
+          objetivo: `El recado es para ${el(B)}.`,
+          dialogo: voz(elige(tema.recado, dado, CANAL.recado)),
         };
       case 'ir':
         return {
           reach: sitio,
-          // El radio sale de la huella: el Monasterio son 35.771 m2 y su centro
-          // cae dentro de los muros, asi que "llegar" es acercarse; una ermita
-          // con 90 m de radio se daria por alcanzada desde la calle de al lado.
           radio: radioDe(sitio),
+          encargo: n,
           objetivo: `Acercate a ${sitio.nombre}.`,
-          dialogo: [['', rellena(tema.llegada, sitio)],
-            ['', rellena(elige(LLEGADA, dado), sitio)]],
+          dialogo: primeraLlegada
+            ? [['', rellena(tema.llegada, sitio)],
+              ['', rellena(elige(LLEGADA, dado, CANAL.llegada), sitio)]]
+            : [['', rellena(elige(LLEGADA, dado, CANAL.llegada), sitio)]],
         };
       default:
         return {
-          oficio: A,
-          objetivo: `Vuelve ${al(A)} y cuentale lo que has visto.`,
-          dialogo: voz(elige(tema.cerrar, dado)),
+          oficio: A, rol: 'A', encargo: n, quien: el(A),
+          objetivo: `Vuelve con ${el(A)} y cuentale lo que has visto.`,
+          dialogo: voz(elige(tema.cerrar, dado, CANAL.cerrar)),
         };
     }
   });
@@ -333,7 +516,7 @@ function oficioVivo(preferido, vida, origen, dado, distintoDe) {
   const hay = (of) => of !== distintoDe
     && (!vida || !vida.buscarOficio || !!vida.buscarOficio(of, origen));
   if (hay(preferido)) return preferido;
-  const inicio = dado(OFICIOS.length);
+  const inicio = dado(OFICIOS.length, CANAL.oficio);
   for (let i = 0; i < OFICIOS.length; i++) {
     const of = OFICIOS[(inicio + i) % OFICIOS.length];
     if (hay(of)) return of;
@@ -364,7 +547,7 @@ function sitiosLejanos(lugares, dado, origen, n) {
   // ellas, para no quedarse sin encargo en un pueblo pequeno.
   for (const exigir of [true, false]) {
     for (let t = 0; out.length < n && t < 80; t++) {
-      const s = todos[dado(todos.length)];
+      const s = todos[dado(todos.length, CANAL.sitio)];
       if (out.includes(s)) continue;
       if (exigir) {
         if (distancia(origen, s) < Math.max(MIN_ORIGEN, radioDe(s) + MARGEN)) continue;
@@ -379,18 +562,41 @@ function sitiosLejanos(lugares, dado, origen, n) {
 
 // --- ayudantes ---------------------------------------------------------------
 
-// Tirada de dado con estado, sobre el mismo mezclador que los dialogos: cada
-// llamada consume una tirada, asi que el orden de las decisiones fija el
-// encargo. No hace falta otro generador aleatorio en el proyecto.
+// Dado con estado sobre el mismo mezclador que los dialogos, y determinista: no
+// hace falta otro generador aleatorio en el proyecto.
+//
+// Cada decision tira de SU canal, con su propia cuenta. Con un solo contador
+// compartido, la tirada que elige una frase caia en una posicion u otra segun
+// cuantas hubieran gastado las decisiones anteriores... que las tira el mismo
+// dado. O sea que la frase quedaba amarrada al arco que hubiera salido antes, y
+// lo que se recorria de la tabla del mezclador era una diagonal en vez de una
+// fila. Se veia de lejos: de 3618 llegadas, la frase mas repetida salia 1013
+// veces y la menos 258, cuando lo uniforme son 603.
+//
+// Con 9 tiradas por partida esto no se notaba. Con encargos que no se acaban, la
+// variedad ES el juego, asi que si.
+const CANAL = {
+  forma: 1, tema: 2, oficio: 3, sitio: 4,
+  pedir: 5, recado: 6, cerrar: 7, llegada: 8,
+};
+
 function hacerDado(semilla) {
-  let k = 0;
-  return (n) => Math.abs(mezcla(semilla, k++) | 0) % n;
+  const gastado = new Map();
+  return (n, canal) => {
+    const i = gastado.get(canal) || 0;
+    gastado.set(canal, i + 1);
+    // Bits altos y no `% n`: `mezcla` acaba en una multiplicacion, y una
+    // multiplicacion solo arrastra los acarreos hacia arriba, asi que los bits
+    // de abajo -que es donde mira el modulo- son los que menos se mueven.
+    return Math.floor((mezcla(semilla, canal, i) / 4294967296) * n);
+  };
 }
 
-function elige(lista, dado) { return lista[dado(lista.length)]; }
+function elige(lista, dado, canal) { return lista[dado(lista.length, canal)]; }
 
 function el(of) { return `${FEMENINO.has(of) ? 'la' : 'el'} ${of}`; }
-function al(of) { return FEMENINO.has(of) ? `a la ${of}` : `al ${of}`; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-export { OFICIOS };
+// LLEGADA sale fuera solo para que quests.test.mjs pueda contar cuantas veces
+// cae cada frase: es el sitio donde antes se veia el dado sesgado.
+export { OFICIOS, LLEGADA };

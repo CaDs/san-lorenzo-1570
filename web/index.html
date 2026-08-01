@@ -29,6 +29,83 @@
   #portada .entrar { margin-top: 2.4em; color: #ffd98a; font-size: 13px;
                      animation: latido 2.4s ease-in-out infinite; }
   @keyframes latido { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+
+  /* ---- la barra de abajo ------------------------------------------------
+     Los mandos vivian todos en una tecla que habia que haber leido en la
+     portada y recordado, y la portada se borra del DOM 700 ms despues de
+     entrar. A los dos minutos de partida no habia forma de saber que hacia la
+     Q. Esto es DOM y no lienzo a proposito: deslizadores, foco y estados de
+     hover salen gratis aqui y habria que reinventarlos sobre un <canvas>.
+     Mismo pergamino y misma tinta que quests.js y minimap.js, para que se lea
+     como la tercera pieza del mismo objeto y no como cromo del navegador. */
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; z-index: 12;
+         display: none; align-items: stretch; gap: 2px; padding: 0 10px;
+         background: linear-gradient(rgba(41,33,22,.90), rgba(28,22,14,.985));
+         border-top: 1px solid rgb(153,128,77);
+         box-shadow: 0 -10px 26px rgba(0,0,0,.5);
+         font: 13px/1 ui-monospace, monospace; user-select: none; }
+  #bar.on { display: flex; }
+  /* Con el raton capturado los botones no se pueden pulsar: se avisa apagandola
+     en vez de dejar que el jugador haga clic y no pase nada. */
+  #bar.presa { opacity: .45; }
+  #bar .grow { flex: 1; }
+  #bar .sep { width: 1px; margin: 9px 5px; background: rgba(153,128,77,.35); }
+  .chip { display: flex; align-items: center; gap: 8px; padding: 0 13px;
+          background: transparent; border: 0; border-top: 2px solid transparent;
+          color: rgb(214,196,158); cursor: pointer; font: inherit; white-space: nowrap;
+          transition: background .12s, color .12s; }
+  .chip:hover { color: #fff3d4; background: rgba(255,217,102,.12); }
+  .chip.active { color: #fff3d4; border-top-color: rgb(255,217,102);
+                 background: rgba(255,217,102,.18); }
+  .chip .ico { font-size: 16px; color: rgb(255,217,102); line-height: 1; }
+  .chip .lbl { font-size: 13px; }
+  .chip kbd { font: 10px ui-monospace, monospace; color: rgb(153,128,77);
+              background: rgba(255,217,102,.07);
+              border: 1px solid rgba(153,128,77,.55); border-radius: 3px;
+              padding: 2px 5px; }
+  #c-ayuda { font-size: 15px; color: rgb(153,128,77); }
+
+  #paneles { position: absolute; inset: 0; z-index: 13; pointer-events: none; }
+  .panel { position: absolute; bottom: 52px; display: none; width: 330px;
+           pointer-events: auto; padding: 14px 16px 16px;
+           background: rgba(31,25,16,.975);
+           border: 1px solid rgb(153,128,77); border-bottom: 0;
+           box-shadow: 0 -8px 34px rgba(0,0,0,.65);
+           font: 12.5px/1.6 ui-monospace, monospace; color: rgb(214,196,158); }
+  .panel.on { display: block; }
+  .panel b { color: rgb(153,128,77); font-weight: 400; letter-spacing: .14em;
+             text-transform: uppercase; font-size: 10px; }
+  .panel .fila { display: flex; align-items: center; justify-content: space-between;
+                 gap: 6px; margin: 2px 0 8px; flex-wrap: wrap; }
+  .panel .grande { color: rgb(255,217,102); font-size: 22px; letter-spacing: .06em; }
+  .panel .marcas { color: rgba(153,128,77,.7); font-size: 10px; margin-top: -4px; }
+  .panel .marcas span { flex: 1; text-align: center; }
+  .panel .nota { color: rgb(153,128,77); font-size: 11px; margin-top: 9px; }
+  .panel input[type=range] { width: 100%; margin: 4px 0 6px;
+                             accent-color: rgb(255,217,102); background: transparent; }
+  .mini { flex: 1; padding: 7px 4px; background: rgba(255,217,102,.08);
+          border: 1px solid rgba(153,128,77,.5); color: rgb(214,196,158);
+          font: 11px ui-monospace, monospace; cursor: pointer; }
+  .mini:hover { background: rgba(255,217,102,.17); color: #fff3d4; }
+  .mini.on { background: rgba(255,217,102,.24); border-color: rgb(255,217,102);
+             color: #fff3d4; }
+  .rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .rejilla .mini { text-align: left; padding: 8px 10px; font-size: 12px; }
+  /* La lista de los 25. Se desborda hacia arriba y por eso lleva su propio
+     limite de alto: con 25 renglones el panel llegaria al techo de la ventana. */
+  #p-misterios { width: 380px; }
+  .lista { max-height: 46vh; overflow-y: auto; margin-top: 6px;
+           border-top: 1px solid rgba(153,128,77,.35); padding-top: 6px; }
+  .lista .visto { color: rgb(255,217,102); margin: 2px 0; }
+  .lista .porver { color: rgba(153,128,77,.85); margin: 2px 0; font-style: italic; }
+  .hallado { border: 1px solid rgb(153,128,77); padding: 8px 10px; margin: 4px 0 8px;
+             background: rgba(255,217,102,.08); }
+  .hallado b { color: rgb(255,217,102); text-transform: none; letter-spacing: 0;
+               font-size: 12.5px; }
+  #p-ayuda { width: 388px; }
+  #p-ayuda kbd { color: rgb(255,217,102); border: 1px solid rgba(153,128,77,.5);
+                 border-radius: 3px; padding: 0 4px; font-size: 11px; }
+  #p-ayuda div { margin: 3px 0; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -49,7 +126,10 @@
       <b>E</b> hablar &nbsp;·&nbsp; <b>Q</b> preguntar el camino &nbsp;·&nbsp; <b>X</b> dejar la conversacion<br>
       <b>[ ]</b> mover el sol &nbsp;·&nbsp; <b>P</b> parar el reloj<br>
       <b>V</b> vuelo libre: <b>W S</b> avanzar &nbsp;·&nbsp; <b>A</b> ladear &nbsp;·&nbsp; <b>E</b> subir &nbsp;·&nbsp; <b>D</b> bajar<br>
-      <b>Esc</b> soltar el raton
+      <b>Esc</b> soltar el raton<br>
+      <br>
+      Todo esto vuelve a estar en la barra de abajo, que no se va: ahi se elige
+      tambien la hora, el dia del ano y el tiempo que hace.
     </div>
     <div class="entrar" id="estado">levantando el pueblo…</div>
   </div>

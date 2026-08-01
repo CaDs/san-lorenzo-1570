@@ -273,14 +273,65 @@ function buildPino(idx) {
   return soup.geometry();
 }
 
+// UN material para las nueve mallas, no uno por malla. Antes cada arquetipo se
+// hacia el suyo, o sea nueve materiales y nueve programas compilados para pintar
+// exactamente lo mismo.
+//
+// El problema de tintar por estacion es que el color va horneado por vertice
+// -tronco y copa en la misma geometria- y el tinte por instancia ya esta gastado
+// en luminosidad, a proposito, para no virar el tronco hacia verde. La salida es
+// la que roofMaterial() ya usa para distinguir paja de teja: la PROPORCION G/R
+// del color de vertice, que no cambia aunque se escale el brillo.
+//
+//   encina 0.092/0.062 = 1.48    pino 0.075/0.046 = 1.63    tronco = 0.74
+//
+// Separacion de sobra para sacar tres cosas distintas de un solo numero.
+function materialArbol(uClima) {
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uClima = uClima;
+    shader.vertexShader = 'varying vec3 vANorm;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+      #include <begin_vertex>
+      vANorm = normalize(mat3(modelMatrix) * normal);
+    `);
+    shader.fragmentShader = 'uniform vec2 uClima;\nvarying vec3 vANorm;\n'
+      + shader.fragmentShader;
+    // DESPUES de <color_fragment>, no en <map_fragment>: es ahi donde three
+    // multiplica por el color de vertice, y una mezcla puesta antes se borra
+    // sola en cuanto llega esa multiplicacion.
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      float razon = vColor.g / max(vColor.r, 1e-4);
+      float esHoja = step(1.10, razon);
+      float esPino = step(1.55, razon);
+
+      // La encina es PERENNIFOLIA: no pierde la hoja, y el pino menos. Aqui no
+      // hay otono de colores, y pintarlo seria plantar Nueva Inglaterra en
+      // Abantos. Lo que si cambia es que al final del verano seco la hoja queda
+      // polvorienta y grisacea, asi que esto es un desvio de tono corto y no una
+      // defoliacion. Al pino no le pasa ni eso.
+      float mustia = esHoja * (1.0 - esPino) * uClima.x;
+      diffuseColor.rgb = mix(diffuseColor.rgb,
+          diffuseColor.rgb * vec3(1.16, 1.06, 0.84), mustia);
+
+      // Nieve en la copa, solo en lo que mira hacia arriba. Un pinar nevado es
+      // LA imagen del invierno en esta sierra y cuesta estas dos lineas.
+      float cuajaA = esHoja * smoothstep(0.25, 0.8, vANorm.y)
+                   * smoothstep(0.35, 0.8, uClima.y);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.58, 0.61, 0.67), cuajaA * 0.85);
+    `);
+  };
+  return mat;
+}
+
 // Una malla instanciada por arquetipo: color por vertice ya horneado en la
 // geometria (tronco vs copa), tinte por instancia SOLO en luminosidad para no
 // virar el tono del tronco hacia verde. Atributo crudo en vez de
 // `setColorAt`: ese aplica conversion sRGB y aqui todo va en lineal, igual
 // que el resto de world.js.
-function instancedFromList(geo, list, name) {
-  const mesh = new THREE.InstancedMesh(
-    geo, new THREE.MeshLambertMaterial({ vertexColors: true }), list.length);
+function instancedFromList(geo, list, name, mat) {
+  const mesh = new THREE.InstancedMesh(geo, mat, list.length);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const pos = new THREE.Vector3();
@@ -303,7 +354,8 @@ function instancedFromList(geo, list, name) {
 // placements: {x,y,z,yaw,esc,pinar,tono}. El arquetipo lo decide un hash de
 // la posicion, no `tono` ni el orden de llegada: asi dos arboles vecinos casi
 // nunca comparten silueta exacta aunque el bosque entero sea determinista.
-export function crearArboleda(placements) {
+export function crearArboleda(placements, uClima) {
+  const mat = materialArbol(uClima);
   const oakGeo = Array.from({ length: N_OAK }, (_, i) => buildEncina(i));
   const pineGeo = Array.from({ length: N_PINE }, (_, i) => buildPino(i));
   const oakList = Array.from({ length: N_OAK }, () => []);
@@ -318,7 +370,7 @@ export function crearArboleda(placements) {
   }
 
   const out = [];
-  oakGeo.forEach((g, i) => { if (oakList[i].length) out.push(instancedFromList(g, oakList[i], `Encina${i}`)); });
-  pineGeo.forEach((g, i) => { if (pineList[i].length) out.push(instancedFromList(g, pineList[i], `Pino${i}`)); });
+  oakGeo.forEach((g, i) => { if (oakList[i].length) out.push(instancedFromList(g, oakList[i], `Encina${i}`, mat)); });
+  pineGeo.forEach((g, i) => { if (pineList[i].length) out.push(instancedFromList(g, pineList[i], `Pino${i}`, mat)); });
   return out;
 }

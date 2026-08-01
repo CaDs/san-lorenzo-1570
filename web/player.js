@@ -14,7 +14,6 @@ const RUN = 7.0;
 const SENSITIVITY = 0.0022;
 const EYE_HEIGHT = 1.6;
 const RADIUS = 0.35;              // el mismo de la capsula de Godot
-const OCC_CELL = 10.0;
 const GRAVITY = 18.0;             // mas dura que la real: en la calle un salto
 const JUMP = 5.4;                 // lunar se lee como un fallo, no como salto
 
@@ -30,28 +29,9 @@ export class Player {
     this.pos = new THREE.Vector3();
     this.vy = 0;                    // 0 = pisando el suelo; si no, salto en curso
 
-    // Indice de fachadas por celda, para no probar 3545 casas en cada paso.
-    this.grid = new Map();
-    world.data.buildings.forEach((b) => {
-      const flat = b.p;
-      const n = flat.length / 2;
-      if (n < 3) return;
-      const poly = [];
-      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-      for (let i = 0; i < n; i++) {
-        poly.push(flat[i * 2], flat[i * 2 + 1]);
-        x0 = Math.min(x0, flat[i * 2]); x1 = Math.max(x1, flat[i * 2]);
-        z0 = Math.min(z0, flat[i * 2 + 1]); z1 = Math.max(z1, flat[i * 2 + 1]);
-      }
-      for (let cy = (z0 / OCC_CELL) | 0; cy <= (z1 / OCC_CELL | 0); cy++) {
-        for (let cx = (x0 / OCC_CELL) | 0; cx <= (x1 / OCC_CELL | 0); cx++) {
-          const k = cx * 100000 + cy;
-          let l = this.grid.get(k);
-          if (!l) this.grid.set(k, l = []);
-          l.push(poly);
-        }
-      }
-    });
+    // El indice de fachadas ya no se construye aqui: vive en world.js, porque
+    // ahora lo usan dos -esta colision y la costura del grafo de calles- y dos
+    // indices del mismo dato es como se acaba con dos que no dicen lo mismo.
 
     addEventListener('keydown', (e) => {
       this.keys.add(e.code);
@@ -75,23 +55,14 @@ export class Player {
     this.sync();
   }
 
-  // Huellas candidatas alrededor de (x, z): las de su celda y las ocho vecinas.
-  cerca(x, z) {
-    const cx = (x / OCC_CELL) | 0, cy = (z / OCC_CELL) | 0;
-    const out = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const l = this.grid.get((cx + dx) * 100000 + (cy + dy));
-        if (l) out.push(...l);
-      }
-    }
-    return out;
-  }
-
-  // Cierto si un cilindro de radio RADIUS en (x, z) toca alguna fachada.
+  // Cierto si un cilindro de radio RADIUS en (x, z) toca alguna fachada. Un paso
+  // bajo edificio no cuenta, y de eso se encarga world.chocaEdificio: OSM trae
+  // soportales, calles que cruzan por debajo de una casa y escaleras que salen
+  // por un arco, todo con tunnel=building_passage, y el juego los tiraba. Con la
+  // via borrada y el edificio de encima macizo, el hueco por el que se pasa de
+  // verdad era un muro, y habia calles que no llevaban a ninguna parte.
   blocked(x, z) {
-    for (const poly of this.cerca(x, z)) if (hits(poly, x, z, RADIUS)) return true;
-    return false;
+    return this.world.chocaEdificio(x, z, RADIUS);
   }
 
   update(dt) {
@@ -150,20 +121,3 @@ export class Player {
   }
 }
 
-// Punto contra poligono con margen: dentro, o a menos de `r` de alguna arista.
-function hits(poly, x, z, r) {
-  const n = poly.length / 2;
-  let inside = false;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = poly[i * 2], zi = poly[i * 2 + 1];
-    const xj = poly[j * 2], zj = poly[j * 2 + 1];
-    if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) inside = !inside;
-    // distancia al segmento i-j
-    const ex = xj - xi, ez = zj - zi;
-    const ll = ex * ex + ez * ez;
-    const t = ll > 0 ? Math.min(Math.max(((x - xi) * ex + (z - zi) * ez) / ll, 0), 1) : 0;
-    const px = xi + ex * t - x, pz = zi + ez * t - z;
-    if (px * px + pz * pz < r * r) return true;
-  }
-  return inside;
-}

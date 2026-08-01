@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { crearArboleda } from './trees.js';
+import { Precipitacion } from './lluvia.js';
 import { Humo } from './humo.js';
 
 // Construye el terreno y los edificios de San Lorenzo desde data/build/.
@@ -22,6 +23,8 @@ const STOREY_DIV = 3.2;
 const ROOF_PITCH = 0.92;
 const ROOF_MAX = 4.6;
 const EAVES = 0.45;
+// Vuelo del alero en una cubierta de patio, por dentro y por fuera.
+const ALERO_PATIO = 0.9;
 const PASO_SONDA = 2.0;         // m entre sondas al medir el vuelo de un faldon
 const VUELO_MAX = 1.0;          // m de faldon sobre el vacio que se toleran
 
@@ -374,9 +377,11 @@ const NOISE_GLSL = `
 // vertice, a 5 m de resolucion, no puede ver.
 // `roca` a 0 desactiva la mezcla hacia granito: en la calle no hay ladera, y
 // el tinte azulado de la roca ensuciaba la tierra pisada.
-function terrainMaterial(roca = 1.0) {
+function terrainMaterial(roca = 1.0, uClima) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uClima = uClima;
+    shader.fragmentShader = 'uniform vec2 uClima;\n' + shader.fragmentShader;
     shader.vertexShader = 'varying vec3 vTPos;\nvarying vec3 vTNorm;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
@@ -397,6 +402,31 @@ function terrainMaterial(roca = 1.0) {
       diffuseColor.rgb *= mix(vec3(1.0), rockTint,
           smoothstep(0.30, 0.65, slopeFine) * 0.35 * ${roca.toFixed(2)});
     `);
+    // OJO CON EL SITIO: la estacion va DESPUES de <color_fragment>, no en
+    // <map_fragment> como el ruido de arriba. En el fragmento de three el orden
+    // es map_fragment y luego color_fragment, y color_fragment hace
+    // `diffuseColor *= vColor`. Todo lo que hay arriba es multiplicativo y por
+    // eso le da igual el orden; una MEZCLA no: pintaba el suelo de blanco y
+    // acto seguido el color de vertice del terreno -que es casi negro- lo
+    // devolvia a pardo. Se veia como que el uniforme no llegaba, y llegaba.
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      // El pasto de agosto, que es la senal de estacion mas visible del termino.
+      // Va en el shader y no rehorneando el atributo de color porque el terreno
+      // son mas de 400.000 vertices con el color ya cocido por pendiente.
+      diffuseColor.rgb = mix(diffuseColor.rgb,
+          diffuseColor.rgb * vec3(1.45, 1.20, 0.62), uClima.x);
+
+      // La nieve cuaja por COTA, no en todo a la vez. La linea baja segun cuanta
+      // hay: con poca solo se blanquean las cumbres -el terreno va de 881 a
+      // 1334 m- y el pueblo, a 1030, sigue pardo, que es lo que pasa la mayoria
+      // de las veces que nieva aqui. Y no cuaja en lo vertical.
+      float linea = 1350.0 - uClima.y * 500.0;
+      float cuaja = smoothstep(linea, linea + 120.0, vTPos.y)
+                  * smoothstep(0.35, 0.75, vTNorm.y);
+      diffuseColor.rgb = mix(diffuseColor.rgb,
+          vec3(0.52, 0.55, 0.60) * (0.90 + 0.20 * nFine), cuaja);
+    `);
   };
   return mat;
 }
@@ -405,9 +435,11 @@ function terrainMaterial(roca = 1.0) {
 // grano fibroso mas grueso para la paja. Se distingue por el color de vertice
 // ya existente (la proporcion es invariante al *= de brillo que aplican
 // gableRoof/slateRoof, asi que sirve de "textura" barata sin atributo nuevo).
-function roofMaterial() {
+function roofMaterial(uClima) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uClima = uClima;
+    shader.fragmentShader = 'uniform vec2 uClima;\n' + shader.fragmentShader;
     shader.vertexShader = 'varying vec3 vRPos;\nvarying vec3 vRNorm;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
@@ -440,6 +472,19 @@ function roofMaterial() {
           diffuseColor.rgb *= 1.0 - curso * 0.14;
         }
       }
+    `);
+    // Igual que en el terreno: la nieve va DESPUES de <color_fragment>, o el
+    // color de vertice del tejado la borra justo despues de pintarla.
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      // Aqui no hay termino de cota: si nieva en el pueblo, nieva en todos los
+      // tejados del pueblo. Lo que manda es la pendiente, que de un faldon muy
+      // inclinado se cae, y la orientacion: la cara que mira al sur se deshiela
+      // antes y por eso aguanta menos.
+      float pitchN = 1.0 - abs(vRNorm.y);
+      float cuajaN = smoothstep(0.75, 0.30, pitchN) * smoothstep(0.45, 0.85, uClima.y);
+      cuajaN *= 0.75 + 0.25 * smoothstep(0.2, -0.6, vRNorm.z);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.60, 0.63, 0.69), cuajaN);
     `);
   };
   return mat;
@@ -506,6 +551,13 @@ export class World extends THREE.Group {
     }
 
     this.night = 1.0;
+    // El portador del clima: (seco, nieve). `seco` es cuanto ha amarilleado el
+    // pasto y `nieve` cuanta hay cuajada. Un solo objeto uniform compartido por
+    // el terreno, los tejados y las copas, igual que `userData.glow` reparte la
+    // luz de las ventanas: escribir aqui llega a los tres materiales sin tener
+    // que rehornear los 400.000 vertices de color del terreno ni las geometrias
+    // de arbol, que llevan el color cocido dentro.
+    this.uClima = { value: new THREE.Vector2(0, 0) };
     this.lampPos = [];
     this.pool = [];
     this.nextPoolUpdate = 0;
@@ -516,6 +568,10 @@ export class World extends THREE.Group {
     this.occR = new Set();
 
     this.add(this.terrainNode());
+    // Antes de levantar los muros: buildingNodes() necesita saber por donde
+    // pasa una calle para abrirle el soportal en vez de tapiarlo.
+    this.buildFachadas();
+    this.buildPasos();
     this.add(...this.buildingNodes());
     this.add(this.roadsNode());
     this.addTorches();
@@ -526,6 +582,9 @@ export class World extends THREE.Group {
 
     this.humo = new Humo(this.chimeneas);
     this.add(this.humo.objeto);
+
+    this.precip = new Precipitacion();
+    this.add(this.precip);
 
     // Solo las mallas. Si esto tocase tambien a las luces del pool, cada
     // antorcha pediria su mapa de sombra cubico y el shader se pasa de
@@ -541,6 +600,194 @@ export class World extends THREE.Group {
       + ` | ${this.lampPos.length} antorchas | malla ${Math.round(performance.now() - t0)} ms`);
   }
 
+  // Los pasos bajo edificio y los tuneles, en segmentos sueltos y listos para
+  // preguntarles si un punto cae dentro.
+  //
+  // Sin esto, recuperarlos en los datos no habria servido de nada: la via
+  // volveria al mapa y al grafo de los vecinos, pero el jugador seguiria dandose
+  // contra el edificio de encima, que es solido de arriba abajo. Hay que
+  // vaciarle el hueco por donde de verdad se pasa.
+  // Todo tramo de calle que discurra POR DENTRO de una huella es un paso.
+  //
+  // Empezo siendo solo lo que OSM etiqueta -tunnel, covered, bridge- y no
+  // bastaba, porque una calle en OSM viene partida en varias vias y la etiqueta
+  // la lleva UNA. La calle Capilla son tres tramos y solo el de en medio dice
+  // `covered=yes`; la Grimaldi igual; la avenida de Juan de Borbon son seis y
+  // solo uno dice `building_passage`. Se abria el metro y medio etiquetado y
+  // seguia tapiado lo de antes y lo de despues, que es el mismo soportal bajo el
+  // mismo edificio.
+  //
+  // Asi que la regla es geometrica y no de etiqueta: si el eje de una calle
+  // cartografiada cae dentro de una huella, por ahi se pasa. A esta escala nadie
+  // dibuja una calle atravesando un edificio macizo por descuido; o hay soportal
+  // o la huella esta dibujada por encima de la calle, y en los dos casos la
+  // calle es de verdad y el muro no.
+  //
+  // Lo unico que abre de mas es el vial de servicio que entra en una nave, y
+  // colarse en un almacen es mucho menos grave que una calle del centro que
+  // muere contra una pared.
+  buildPasosPorDentro() {
+    let tramos = 0;
+    for (const r of this.data.roads) {
+      // `c` = cerrada a mano en prep.py. Es un vial de servicio que muere dentro
+      // de una nave: la regla lo abriria y no debe, que un almacen no es calle.
+      if (r.c) continue;
+      const f = r.p;
+      const semi = Math.max(2.0, r.w * 0.5 + 0.6);
+      for (let i = 2; i < f.length; i += 2) {
+        const x1 = f[i - 2], z1 = f[i - 1], x2 = f[i], z2 = f[i + 1];
+        const L = Math.hypot(x2 - x1, z2 - z1);
+        if (L < 0.01) continue;
+        // Se sondea cada dos metros y se guarda el trozo continuo que este
+        // dentro, no el segmento entero: una calle que solo roza una esquina no
+        // tiene por que abrirse de punta a punta.
+        const n = Math.max(1, Math.round(L / 2));
+        let ini = -1;
+        for (let k = 0; k <= n; k++) {
+          const t = k / n;
+          const dentro = this.dentroDeFachada(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t);
+          if (dentro && ini < 0) ini = k;
+          if ((!dentro || k === n) && ini >= 0) {
+            const t0 = ini / n, t1 = (dentro ? k : k - 1) / n;
+            this.pasos.push({
+              x1: x1 + (x2 - x1) * t0, z1: z1 + (z2 - z1) * t0,
+              x2: x1 + (x2 - x1) * t1, z2: z1 + (z2 - z1) * t1, semi,
+            });
+            tramos++;
+            ini = -1;
+          }
+        }
+      }
+    }
+    return tramos;
+  }
+
+  // Si el punto cae DENTRO de alguna huella (sin margen). No usa chocaEdificio
+  // porque esa consulta ya descuenta los pasos, y aqui se esta construyendo la
+  // lista de pasos: se morderia la cola.
+  dentroDeFachada(x, z) {
+    for (const poly of this.fachadasCerca(x, z)) {
+      if (poly.pasa) continue;
+      if (!dentroDe(poly, x, z)) continue;
+      const q = poly.patios;
+      let enPatio = false;
+      if (q) for (const h of q) if (dentroDe(h, x, z)) enPatio = true;
+      if (!enPatio) return true;
+    }
+    return false;
+  }
+
+  buildPasos() {
+    this.pasos = [];
+    for (const r of this.data.roads) {
+      if (!r.t) continue;
+      // Un poco mas ancho que la via: el soportal real tiene mas luz que la
+      // linea que lo representa, y quedarse corto es volver a atascarlo.
+      const semi = Math.max(2.0, r.w * 0.5 + 0.6);
+      for (let i = 2; i < r.p.length; i += 2) {
+        this.pasos.push({
+          x1: r.p[i - 2], z1: r.p[i - 1], x2: r.p[i], z2: r.p[i + 1], semi,
+        });
+      }
+    }
+    const etiquetados = this.pasos.length;
+    const geometricos = this.buildPasosPorDentro();
+    console.log(`pasos: ${etiquetados} por etiqueta de OSM`
+      + ` + ${geometricos} por geometria (calle dentro de huella)`);
+  }
+
+  // Indice de fachadas para chocar contra ellas. Vivia en player.js, que se
+  // construia su propia rejilla de poligonos; se sube aqui porque ahora hay dos
+  // clientes -la colision del jugador y la costura del grafo de calles- y tener
+  // dos copias del mismo indice es como se acaba con dos que no dicen lo mismo.
+  buildFachadas() {
+    this.fachadas = new Map();
+    for (const b of this.data.buildings) {
+      const flat = b.p;
+      const n = flat.length / 2;
+      if (n < 3) continue;
+      const poly = [];
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < n; i++) {
+        poly.push(flat[i * 2], flat[i * 2 + 1]);
+        x0 = Math.min(x0, flat[i * 2]); x1 = Math.max(x1, flat[i * 2]);
+        z0 = Math.min(z0, flat[i * 2 + 1]); z1 = Math.max(z1, flat[i * 2 + 1]);
+      }
+      // Todas entran en el indice, tambien las que no frenan: la prueba de
+      // cubiertas colgadas de ?test lo usa para saber si un triangulo de tejado
+      // esta sobre su huella, y sacar de aqui a las 37 marquesinas dejaba sus
+      // propios tejados volando sobre nada. `pasa` marca la exencion, y la mira
+      // solo la colision.
+      poly.pasa = !!b.x;
+      poly.patios = b.q || null;
+      for (let cy = (z0 / OCC_CELL) | 0; cy <= (z1 / OCC_CELL | 0); cy++) {
+        for (let cx = (x0 / OCC_CELL) | 0; cx <= (x1 / OCC_CELL | 0); cx++) {
+          const k = cx * 100000 + cy;
+          let l = this.fachadas.get(k);
+          if (!l) this.fachadas.set(k, l = []);
+          l.push(poly);
+        }
+      }
+    }
+  }
+
+  // Las huellas candidatas alrededor de (x,z): las de su celda y las ocho
+  // vecinas. La usan la colision y la prueba de cubiertas colgadas de ?test.
+  fachadasCerca(x, z) {
+    const cx = (x / OCC_CELL) | 0, cy = (z / OCC_CELL) | 0;
+    const out = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const l = this.fachadas.get((cx + dx) * 100000 + (cy + dy));
+        if (l) out.push(...l);
+      }
+    }
+    return out;
+  }
+
+  // Si una capsula de radio `r` en (x,z) toca una fachada. Un paso bajo edificio
+  // no cuenta: por ahi se pasa aunque haya casa encima.
+  chocaEdificio(x, z, r) {
+    for (const poly of this.fachadasCerca(x, z)) {
+      // Lo que OSM marca por encima de la calle o sin arrancar del suelo se
+      // dibuja pero no frena: marquesinas, techos sobre pies y pasarelas. Una
+      // de ellas cortaba 56 m de la calle Floridablanca.
+      if (poly.pasa) continue;
+      if (tocaPoligono(poly, x, z, r)) return !this.enPaso(x, z);
+    }
+    return false;
+  }
+
+  // Si entre dos puntos hay edificio de por medio. Se muestrea la recta contra
+  // las fachadas de verdad y NO contra la rejilla de ocupacion: esa marca la
+  // celda entera de 10 m, y como las calles van pegadas a las casas daba por
+  // tapadas 2793 de las 7465 aristas de calle que ya existian. O sea que no
+  // servia para nada.
+  hayEdificioEntre(x1, z1, x2, z2) {
+    const d = Math.hypot(x2 - x1, z2 - z1);
+    const n = Math.max(2, Math.ceil(d / 1.5));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      if (this.chocaEdificio(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t, 0.6)) return true;
+    }
+    return false;
+  }
+
+  // Si (x,z) cae dentro de un paso. Son dos docenas de segmentos y ademas solo
+  // se pregunta cuando ya se ha chocado con algo, asi que un barrido lineal
+  // sobra: no hace falta rejilla para esto.
+  enPaso(x, z) {
+    for (const p of this.pasos) {
+      const dx = p.x2 - p.x1, dz = p.z2 - p.z1;
+      const len2 = dx * dx + dz * dz;
+      let t = len2 > 0 ? ((x - p.x1) * dx + (z - p.z1) * dz) / len2 : 0;
+      t = Math.min(1, Math.max(0, t));
+      const ex = x - (p.x1 + dx * t), ez = z - (p.z1 + dz * t);
+      if (ex * ex + ez * ez <= p.semi * p.semi) return true;
+    }
+    return false;
+  }
+
   // Enciende o apaga hogares y antorchas. 0 = pleno dia, 1 = noche cerrada.
   setNight(f) {
     this.night = Math.min(Math.max(f, 0), 1);
@@ -548,9 +795,25 @@ export class World extends THREE.Group {
     this.flameMat.uniforms.energy.value = 3.0 * this.night;
   }
 
+  // El tiempo que hace, repartido a quien lo pinta. Lo llama daynight.js desde
+  // apply(), que es quien lo sabe. Escribir el uniform llega de una vez al
+  // terreno, a los tejados y a las copas.
+  setClima(c) {
+    this.clima = c;
+    this.uClima.value.set(c.seco, c.cubierta);
+    this.precip.cantidad = c.lluvia;
+    this.precip.nieve = c.nieve;
+    // Las chimeneas tiran de noche... y cuando hace frio. En enero se enciende a
+    // mediodia, que es medio pueblo humeando a la hora de comer. Antes esto solo
+    // miraba la noche y el pueblo de invierno estaba tan apagado como el de julio.
+    this.humoFrio = c.frio;
+  }
+
   update(dt, t, camPos) {
     this.flameMat.uniforms.time.value = t;
-    this.humo.update(dt, t, camPos, this.night);
+    // Lo que enciende la lumbre es la noche O el frio, lo que mande de los dos.
+    this.humo.update(dt, t, camPos, Math.max(this.night, (this.humoFrio || 0) * 0.85));
+    this.precip.update(t, camPos);
 
     // El fuego no es una bombilla: cada antorcha late con su propia fase.
     for (let k = 0; k < this.pool.length; k++) {
@@ -675,13 +938,16 @@ export class World extends THREE.Group {
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     g.setIndex(new THREE.BufferAttribute(idx, 1));
 
-    const mesh = new THREE.Mesh(g, terrainMaterial());
+    const mesh = new THREE.Mesh(g, terrainMaterial(1.0, this.uClima));
     mesh.name = 'Terreno';
     return mesh;
   }
 
   buildingNodes() {
     const wall = { v: [], n: [], uv: [] };
+    // Donde una calle cruza la fachada, el muro arranca a la altura del dintel.
+    const abrirPaso = (x, z) => (this.enPaso(x, z)
+      ? this.heightAt(x, z) + ALTO_PASO : null);
     const roof = new Soup();
     const monIdx = this.biggestFootprint();
 
@@ -719,10 +985,31 @@ export class World extends THREE.Group {
       const top = suelo + plantas * STOREY_H + seed * 0.45;
 
       if (k === monIdx) {
-        this.monastery(poly, base, suelo, wall, roof);
+        this.monastery(poly, base, suelo, wall, roof, abrirPaso);
         return;
       }
-      extrudeRing(poly, base, top, [seed, suelo, 0], wall);
+      extrudeRing(poly, base, top, [seed, suelo, 0], wall, abrirPaso);
+
+      // Con patio, la cubierta va en anillo y el patio se queda abierto. 97
+      // casas del pueblo lo tienen y hasta ahora se rellenaban macizas, que es
+      // lo que tapiaba las sendas que cruzan la Casa de la Compaña.
+      const huecos = (b.q || []).map(aPuntos).filter((h) => h.length >= 3);
+      if (huecos.length) {
+        for (const h of huecos) {
+          // Los muros del patio miran hacia DENTRO del patio, o sea al reves
+          // que la fachada: se extruye el anillo al reves.
+          extrudeRing([...h].reverse(), base, top, [seed, suelo, 0], wall, abrirPaso);
+        }
+        const col = mul(seed < 0.45 ? ROOF_THATCH : ROOF_TILE,
+          0.82 + 0.36 * fract(seed * 7.13));
+        if (patioRoof(poly, huecos, top, 1.4 + seed * 1.2, col, roof)) {
+          addDoor(poly, suelo, seed, wall);
+          return;
+        }
+        // Si el anillo no se deja meter hacia dentro -planta muy estrecha o
+        // vertices repetidos-, se cae a la cubierta de siempre: mejor un patio
+        // tapado que una casa sin tejado.
+      }
       gableRoof(poly, top, seed, roof, this.chimeneas);
       addDoor(poly, suelo, seed, wall);
     });
@@ -735,7 +1022,7 @@ export class World extends THREE.Group {
     const walls = new THREE.Mesh(wg, this.wallMat);
     walls.name = 'Muros';
 
-    const roofs = new THREE.Mesh(roof.geometry(), roofMaterial());
+    const roofs = new THREE.Mesh(roof.geometry(), roofMaterial(this.uClima));
     roofs.name = 'Cubiertas';
     return [walls, roofs];
   }
@@ -810,7 +1097,7 @@ export class World extends THREE.Group {
     // -que es justo lo que se tiene delante todo el rato- era la unica
     // superficie del pueblo sin grano, una lamina marron lisa entre fachadas
     // con textura y monte con textura.
-    const mesh = new THREE.Mesh(g, terrainMaterial(0.55));
+    const mesh = new THREE.Mesh(g, terrainMaterial(0.55, this.uClima));
     mesh.name = 'Calles';
     return mesh;
   }
@@ -1067,7 +1354,7 @@ export class World extends THREE.Group {
       }
     }
 
-    const arboles = crearArboleda(sitios);
+    const arboles = crearArboleda(sitios, this.uClima);
     this.add(...arboles);
     const pinos = sitios.filter((s) => s.pinar).length;
     console.log(`vida: ${sitios.length} arboles (${pinos} pinos) en`
@@ -1094,11 +1381,14 @@ export class World extends THREE.Group {
   // El Monasterio sobre su huella real: muralla perimetral, tapa de pizarra,
   // chapitel en cada esquina del rectangulo orientado, cimborrio octogonal con
   // cupula y dos torres de campanas.
-  monastery(poly, base, suelo, wall, roof) {
+  monastery(poly, base, suelo, wall, roof, abrirPaso) {
     // 0.05 = piedra vista, 1 = modo Monasterio (reticula de huecos) en el shader
     const uv = [0.05, suelo, 1];
     const top = suelo + MON_WALL_H;
-    extrudeRing(poly, base, top, uv, wall);
+    // La muralla tambien se abre por donde cruza una calle. Es la que separa la
+    // lonja de los jardincillos, asi que sin esto el paso se anda pero se ve
+    // tapiado, que es lo peor de los dos mundos.
+    extrudeRing(poly, base, top, uv, wall, abrirPaso);
 
     // Tapa plana sobre toda la huella. Ya no es la cubierta: es el enlosado que
     // se ve en el fondo de los patios, con las crujias levantadas encima.
@@ -1290,7 +1580,23 @@ function tiltX(b, ang) {
 
 // Extruye un anillo en planta entre dos cotas, con las caras hacia fuera.
 // Acepta el anillo en cualquier sentido de giro: normaliza dentro.
-function extrudeRing(ring, base, top, uv, wall) {
+// Alto libre de un soportal y grosor minimo del dintel que queda encima.
+const ALTO_PASO = 3.6;
+const DINTEL_MIN = 0.7;
+
+// `abrir(x, z)` es opcional y devuelve NULL o la cota del dintel. Donde da una
+// cota, la fachada arranca ahi en vez de en la base, y lo que queda encima es el
+// dintel del soportal. Es lo que convierte "se puede pasar" en "se ve por donde".
+//
+// Devuelve una COTA y no un booleano por un motivo que costo una pasada: el
+// dintel no puede medirse desde `base`. La base de una huella es su vertice mas
+// bajo, y en el Monasterio -205 x 162 m en cuesta- eso queda metros bajo tierra,
+// asi que base + 3,6 seguia siendo subterraneo y el hueco se abria donde no se
+// ve. La cota tiene que salir del terreno EN ESE PUNTO.
+//
+// Hacia falta: abrir la colision sin abrir la geometria deja al jugador
+// atravesando un muro macizo como un fantasma, que se lee peor que el muro.
+function extrudeRing(ring, base, top, uv, wall, abrir = null) {
   let poly = ring;
   const n = poly.length;
   let area2 = 0;
@@ -1299,19 +1605,49 @@ function extrudeRing(ring, base, top, uv, wall) {
     area2 += p[0] * q[1] - q[0] * p[1];
   }
   if (area2 > 0) poly = poly.slice().reverse();
+
+  const quad = (p, q, y0, y1, nx, nz) => {
+    if (y1 - y0 < 1e-3) return;
+    const p0 = [p[0], y0, p[1]], p1 = [q[0], y0, q[1]];
+    const p2 = [q[0], y1, q[1]], p3 = [p[0], y1, p[1]];
+    // Godot: [p0,p2,p1, p0,p3,p2]. Invertido para antihorario.
+    for (const t of [p0, p1, p2, p0, p2, p3]) {
+      wall.v.push(t[0], t[1], t[2]);
+      wall.n.push(nx, 0, nz);
+      wall.uv.push(uv[0], uv[1], uv[2]);
+    }
+  };
+
   for (let i = 0; i < n; i++) {
     const p = poly[i], q = poly[(i + 1) % n];
     const ex = q[0] - p[0], ez = q[1] - p[1];
     const el = Math.hypot(ex, ez);
     if (el < 1e-3) continue;
     const nx = -ez / el, nz = ex / el;
-    const p0 = [p[0], base, p[1]], p1 = [q[0], base, q[1]];
-    const p2 = [q[0], top, q[1]], p3 = [p[0], top, p[1]];
-    // Godot: [p0,p2,p1, p0,p3,p2]. Invertido para antihorario.
-    for (const t of [p0, p1, p2, p0, p2, p3]) {
-      wall.v.push(t[0], t[1], t[2]);
-      wall.n.push(nx, 0, nz);
-      wall.uv.push(uv[0], uv[1], uv[2]);
+
+    if (!abrir) { quad(p, q, base, top, nx, nz); continue; }
+
+    // Se recorre la arista a medio metro y se agrupan los tramos seguidos que
+    // esten abiertos o cerrados: asi un soportal de tres metros sale de un solo
+    // hueco y no de seis rendijas.
+    const pasos = Math.max(1, Math.ceil(el / 0.5));
+    const en = (k) => [p[0] + ex * (k / pasos), p[1] + ez * (k / pasos)];
+    const abre = (k) => abrir(p[0] + ex * ((k + 0.5) / pasos),
+      p[1] + ez * ((k + 0.5) / pasos));
+    let ini = 0, estado = abre(0);
+    for (let k = 1; k <= pasos; k++) {
+      const e = k < pasos ? abre(k) : null;
+      // Se corta el tramo al cambiar de abierto a cerrado o al revés, y siempre
+      // al llegar al final de la arista.
+      if ((e === null) === (estado === null) && k < pasos) continue;
+      let y0 = base;
+      if (estado !== null) {
+        // Con un edificio tan bajo que el soportal lo dejaria sin fachada, se
+        // levanta entero: mejor tapiado que un muro flotando sobre nada.
+        y0 = top - estado < DINTEL_MIN ? base : Math.max(base, estado);
+      }
+      quad(en(ini), en(k), y0, top, nx, nz);
+      ini = k; estado = e;
     }
   }
 }
@@ -1336,6 +1672,125 @@ export function vuela(poly, x, z) {
 // Un punto seguro dentro de un anillo cualquiera: baricentro del triangulo mas
 // grande de su triangulacion. El centroide del anillo no vale, en una planta en
 // L se sale del edificio.
+// Un array plano [x,z,x,z,...] a [[x,z],...].
+function aPuntos(flat) {
+  const out = [];
+  for (let i = 0; i < flat.length; i += 2) out.push([flat[i], flat[i + 1]]);
+  return out;
+}
+
+function dentroDe(poly, x, z) {
+  const n = poly.length / 2;
+  let dentro = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i * 2], zi = poly[i * 2 + 1];
+    const xj = poly[j * 2], zj = poly[j * 2 + 1];
+    if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) dentro = !dentro;
+  }
+  return dentro;
+}
+
+function cercaDeArista(poly, x, z, r) {
+  const n = poly.length / 2;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i * 2], zi = poly[i * 2 + 1];
+    const xj = poly[j * 2], zj = poly[j * 2 + 1];
+    const ex = xj - xi, ez = zj - zi;
+    const ll = ex * ex + ez * ez;
+    const t = ll > 0 ? Math.min(Math.max(((x - xi) * ex + (z - zi) * ez) / ll, 0), 1) : 0;
+    const px = xi + ex * t - x, pz = zi + ez * t - z;
+    if (px * px + pz * pz < r * r) return true;
+  }
+  return false;
+}
+
+// Punto contra huella con holgura. Venia de player.js con el nombre `hits`; se
+// sube aqui con el indice y se le anaden los patios.
+//
+// La parte solida es lo que esta dentro del contorno Y FUERA de todos los
+// patios, mas un margen `r` alrededor de cualquier arista -tambien las del
+// patio, que son muro por dentro-. Sin el margen se podria colar por la esquina
+// de un patio; sin descontar el patio, un edificio con patio es un bloque
+// macizo, que es como estaban los 97 del pueblo.
+function tocaPoligono(poly, x, z, r) {
+  if (cercaDeArista(poly, x, z, r)) return true;
+  const q = poly.patios;
+  if (q) for (const h of q) if (cercaDeArista(h, x, z, r)) return true;
+  if (!dentroDe(poly, x, z)) return false;
+  if (q) for (const h of q) if (dentroDe(h, x, z)) return false;
+  return true;
+}
+
+// Cubierta de un edificio con patio, en anillo. No se le meten agujeros a
+// gableRoof y hay razon: esa lleva dentro demasiada logica ganada a golpes
+// -faldones colgados, plantas en L, chaflanes, la rejilla de sondeo en metros- y
+// abrirle un hueco es la manera de perderla toda. Esta es aparte y no la toca.
+//
+// La forma es un faldon que sube desde el alero exterior, otro que sube desde el
+// alero del patio, y una banda plana donde se encuentran. Sale de meter hacia
+// dentro los dos anillos con insetRing, que ya existe, y de taparlo con el
+// triangulador de three, que YA acepta agujeros: el Monasterio le pasa una lista
+// vacia desde el principio.
+//
+// ponytail: es una cubierta a la mansarda, no un anillo a dos aguas con su
+// caballete siguiendo el eje medio de la crujia. A la distancia a la que se ve
+// esto -desde la calle y desde el monte- no se distingue; si algun dia se mira
+// desde arriba de cerca, lo que falta es el eje medio.
+function patioRoof(poly, huecos, top, alto, col, roof) {
+  const fuera = insetRing(poly, ALERO_PATIO);
+  if (!fuera) return false;
+  const dentro = huecos.map((h) => insetRing(h, -ALERO_PATIO)).filter(Boolean);
+  if (dentro.length !== huecos.length) return false;
+
+  // Faldon exterior: del alero de fuera al anillo metido, subiendo.
+  faldon(poly, fuera, top, top + alto, col, roof);
+  // Faldon del patio: del alero del patio a su anillo, subiendo tambien. El
+  // patio se cubre desde dentro, que es lo que hace que llueva al fondo y no
+  // sobre el tejado.
+  for (let i = 0; i < huecos.length; i++) {
+    faldon(huecos[i], dentro[i], top, top + alto, col, roof);
+  }
+
+  // Y la banda de arriba, plana, con los patios como agujeros.
+  const contorno = fuera.map((p) => new THREE.Vector2(p[0], p[1]));
+  const agujeros = dentro.map((h) => h.map((p) => new THREE.Vector2(p[0], p[1])));
+  let tris;
+  try {
+    tris = THREE.ShapeUtils.triangulateShape(contorno, agujeros);
+  } catch {
+    return false;             // anillo que se cruza: mejor sin cubierta que con una aleta
+  }
+  const todos = [...fuera, ...dentro.flat()];
+  for (const t of tris) {
+    const p = t.map((i) => [todos[i][0], top + alto, todos[i][1]]);
+    // El triangulador no garantiza el sentido: se orienta hacia arriba, igual
+    // que la tapa del Monasterio.
+    const cruz = (p[1][0] - p[0][0]) * (p[2][2] - p[0][2])
+               - (p[1][2] - p[0][2]) * (p[2][0] - p[0][0]);
+    const o = cruz < 0 ? [p[0], p[1], p[2]] : [p[0], p[2], p[1]];
+    roof.push(o[0], o[1], o[2], [0, 1, 0], col);
+  }
+  return true;
+}
+
+// Un faldon entre dos anillos con el mismo numero de vertices: dos triangulos
+// por arista, con la normal calculada del propio quad.
+function faldon(abajo, arriba, y0, y1, col, roof) {
+  const n = abajo.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const a = [abajo[i][0], y0, abajo[i][1]];
+    const b = [abajo[j][0], y0, abajo[j][1]];
+    const c = [arriba[j][0], y1, arriba[j][1]];
+    const d = [arriba[i][0], y1, arriba[i][1]];
+    // Un punto por debajo del faldon sirve de "dentro" para orientar la cara:
+    // el tejado mira hacia arriba y hacia fuera del solido.
+    const bajo = [(a[0] + c[0]) * 0.5, y0 - 6, (a[2] + c[2]) * 0.5];
+    roof.tri(a, b, c, bajo, col);
+    roof.tri(a, c, d, bajo, col);
+  }
+}
+
 function safeInterior(poly) {
   const contour = poly.map((p) => new THREE.Vector2(p[0], p[1]));
   let best = null, bestA = -1;

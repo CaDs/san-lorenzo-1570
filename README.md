@@ -21,6 +21,7 @@ make dev        # http://localhost:8000/web/
 | `Q` | preguntarle el camino |
 | `X` | dejar la conversacion (o alejarse andando, que la corta igual) |
 | `[` `]` | mover el sol · `P` parar el reloj |
+| barra | hora, día del año y tiempo que hace (suelta el ratón con `Esc`) |
 | `V` | vuelo libre, para ver el pueblo desde arriba |
 | | en vuelo: `W` `S` avanzar · `A` ladear · `E` subir · `D` bajar |
 
@@ -31,17 +32,40 @@ make dev        # http://localhost:8000/web/
 - **El Monasterio** sobre su huella verdadera, con la parrilla de patios, las
   ventanas en retícula, los chapiteles, el cimborrio y la linternilla.
 - **Ciclo de día y noche** con la posición solar real para la latitud del pueblo
-  (40,59° N) y el día del año, cielo procedural, estrellas y luna.
-- **220 vecinos** de ocho oficios recorriendo las calles, con perros, ovejas,
-  gallinas y pájaros. Se puede hablar con todos.
-- **Encargos procedurales**: cada partida trae otros tres, armados con los
-  oficios que andan por la calle y los sitios con nombre real de OSM —los lobos
-  de la dehesa, el agua de la argamasa, la campana rajada de San Bernabé—. La
-  semilla se ve en la portada y se repite con `?seed=`.
+  (40,59° N) y el día del año, cielo procedural, estrellas y luna. El día del año
+  corre, así que el sol de enero es el de enero: 26° a mediodía y nueve horas de
+  luz, contra los 73° y las quince de junio.
+- **El tiempo que hace**, sorteado con los datos reales de la estación del
+  Monasterio: despejado, nubes, cubierto, niebla, lluvia, tormenta y nieve, con
+  las probabilidades de cada mes. Se puede fijar a mano desde la barra o con
+  `?clima=niebla`, y la época con `?dia=15`.
+- **220 vecinos** de ocho oficios recorriendo las calles, con perros, gatos,
+  ovejas, gallinas y pájaros; y vacas paciendo en los campos, lejos del casco.
+  Se puede hablar con todos.
+- **Encargos procedurales y sin fin**: se pide uno nuevo cada vez que se cierra
+  el anterior, armados con los oficios que andan por la calle y los sitios con
+  nombre real de OSM —los lobos de la dehesa, el agua de la argamasa, la campana
+  rajada de San Bernabé—. Quien te lo encarga es quien te lo cierra: los vecinos
+  tienen nombre y el pueblo tiene veintisiete canteros. La semilla se ve en la
+  portada y se repite con `?seed=`.
+- **Y encargos que solo salen cuando toca**: la nieve que corta el camino de los
+  carros de piedra, la helada que revienta la cal recién puesta, la siega de
+  agosto, la riada que se lleva el vado, la leña antes del invierno. En enero no
+  se juega a lo mismo que en agosto.
+- **Modo saber**, opcional: los vecinos cuentan lo que su oficio puede saber
+  estando allí en 1570, y en los sitios saltan cartelas con el dato histórico y
+  **su fuente al pie**. Incluida la que avisa de que en 1570 el pueblo no
+  existía: aquí había monte y pastos, y el caserío que ves es el de hoy.
+- **Un hombre de negro** pasea la lonja de medianoche a las dos, con un perro
+  negro detrás. No da encargos y contesta con acertijos: es la leyenda del perro
+  negro de El Escorial, el que aullaba entre los andamios.
 - Antorchas, humo de chimenea, y un minimapa en pergamino.
 
 Todo se genera de forma determinista: el pueblo sale igual en cada arranque, y
-los encargos igual con la misma semilla.
+el tiempo y los encargos igual con la misma semilla. Con un matiz honesto: desde
+que hay encargos de temporada, cuál te toca depende también de en qué época lo
+pidas, así que la promesa exacta es **misma semilla y misma época, mismo
+encargo**.
 
 ## Cómo está hecho
 
@@ -69,7 +93,8 @@ Necesita `curl` y los ejecutables de GDAL (`ogr2ogr`, `gdal_translate`,
 
 ```
 make test       # abre web/?test: el jugador anda, no se hunde y las fachadas frenan
-make tramas     # 300 semillas de encargos: ninguna genera un objetivo imposible
+make tramas     # 300 semillas y 500 encargos seguidos: ningun objetivo imposible
+make clima      # 60 años de tiempo: se parece al de la sierra de verdad
 ```
 
 ## Licencia y procedencia de los datos

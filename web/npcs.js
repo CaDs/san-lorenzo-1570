@@ -20,6 +20,8 @@ const N_VILLAGERS = 220;
 const N_DOGS = 30;
 const N_SHEEP = 60;
 const N_CHICKENS = 70;
+const N_CATS = 34;
+const N_COWS = 26;
 const N_BIRDS = 24;
 
 // xorshift32 determinista, mismo estilo que rngFrom de world.js (no se
@@ -44,6 +46,35 @@ const SKIN = [0.19, 0.13, 0.10];
 const LIMB = [0.085, 0.062, 0.045];
 const CLOAK = [0.050, 0.045, 0.055];
 const ROLES = ['aguador', 'herrero', 'fraile', 'pastora', 'panadera', 'cantero', 'pescadero', 'tejedora'];
+// Indices de ROLES con nombre de mujer. Es la misma particion que FEMENINO en
+// tramas.js, dicha en indices porque aqui el oficio se guarda como numero.
+const FEM_ROL = new Set([3, 4, 7]);
+// Nombre de pila, del santoral que se usaba aqui en el XVI. Hace falta porque un
+// encargo puede pedir que vuelvas con QUIEN te lo dio, y "Cantero" lo llevan 27
+// de los 220: sin nombre, el objetivo lo cierra el primero con el mismo sombrero.
+const NOMBRES = [
+  ['Bartolome', 'Anton', 'Rodrigo', 'Gil', 'Pedro', 'Lucas', 'Cristobal',
+    'Sancho', 'Diego', 'Alonso', 'Martin', 'Bernardo', 'Tomas', 'Blas',
+    'Andres', 'Julian'],
+  ['Catalina', 'Ines', 'Mencia', 'Juana', 'Beatriz', 'Ursula', 'Marina',
+    'Isabel', 'Aldonza', 'Leonor', 'Teresa', 'Brigida'],
+];
+// Segundo apellido de andar por casa, para que no haya dos del mismo oficio con
+// el mismo nombre: 27 canteros no caben en 16 nombres. Con esto caben 96.
+const APODOS = [
+  ['', 'el Mozo', 'el Viejo', 'de Abantos', 'el Tuerto', 'de la Fuente'],
+  ['', 'la Moza', 'la Vieja', 'de Abantos', 'la Roja', 'de la Fuente'],
+];
+
+// `k` es el numero de orden DENTRO del oficio, no el id global: asi el reparto
+// de nombres se agota oficio por oficio y no se repite ninguno entre canteros.
+function nombreDe(role, k) {
+  const g = FEM_ROL.has(role) ? 1 : 0;
+  const pila = NOMBRES[g][k % NOMBRES[g].length];
+  const apodo = APODOS[g][Math.floor(k / NOMBRES[g].length) % APODOS[g].length];
+  const n = apodo ? `${pila} ${apodo}` : pila;
+  return role === 2 ? `fray ${n}` : n;      // 2 = fraile
+}
 const ROLE_COL = [
   [0.16, 0.14, 0.10], [0.11, 0.09, 0.08], [0.13, 0.12, 0.14],
   [0.18, 0.12, 0.09], [0.20, 0.16, 0.10], [0.12, 0.11, 0.10],
@@ -70,10 +101,29 @@ const TOOL_COL = [
 const HAT_P = [0.55, 0.35, 1.0, 0.85, 0.75, 0.65, 0.5, 0.6];
 const TOOL_P = [0.9, 0.6, 0.15, 0.9, 0.35, 0.85, 0.5, 0.3];
 
+// El rey viste de negro con la gorguera blanca. En lineal y sin llegar al cero
+// absoluto: un negro puro se come el relieve y a la luz de la luna es una silueta
+// plana. Y el blanco, lejos del 1.0, que el juego tonemapea ACES y se quemaria.
+const REY_NEGRO = [0.030, 0.028, 0.034];
+const REY_BLANCO = [0.62, 0.61, 0.58];
+// El perro de la leyenda es negro. Multiplica al color de perro, asi que va bajo.
+const PERRO_NEGRO = 0.22;
+
 const DOG_COL = [0.10, 0.075, 0.05];
 const SHEEP_COL = [0.20, 0.19, 0.17];
 const CHICKEN_COL = [0.21, 0.17, 0.12];
 const BIRD_COL = [0.06, 0.06, 0.07];
+// Gato de pueblo: pardo, atigrado, negro y blanco sucio. Multiplican al color
+// base, que es el del material.
+const CAT_COL = [0.13, 0.10, 0.075];
+const CAT_TONO = [
+  [1.0, 1.0, 1.0], [0.55, 0.55, 0.6], [1.35, 1.25, 1.15], [0.30, 0.28, 0.30],
+];
+// Vaca serrana: parda oscura, y alguna berrenda.
+const COW_COL = [0.115, 0.075, 0.050];
+const COW_TONO = [
+  [1.0, 1.0, 1.0], [0.62, 0.55, 0.52], [1.30, 1.20, 1.10], [0.85, 0.88, 0.92],
+];
 
 // --- geometria de piezas -------------------------------------------------
 // `translate` hornea el punto de giro dentro de la malla: si el pivote de una
@@ -126,6 +176,23 @@ const D_BODY_W = 0.24, D_BODY_H = 0.26, D_BODY_L = 0.55;
 const D_FRONT_Z = 0.20, D_BACK_Z = -0.20;
 const D_BODY_Y = D_LEG_H + D_BODY_H * 0.5;
 const D_HEAD = 0.18;
+
+// --- gato (mas bajo y mas largo que el perro, y con rabo) -------------------
+const T_LEG_H = 0.16, T_LEG_W = 0.045, T_LEG_D = 0.05, T_HIP_X = 0.055;
+const T_BODY_W = 0.13, T_BODY_H = 0.14, T_BODY_L = 0.34;
+const T_FRONT_Z = 0.12, T_BACK_Z = -0.12;
+const T_BODY_Y = T_LEG_H + T_BODY_H * 0.5;
+const T_HEAD = 0.11;
+// El rabo tieso es lo que hace que un bulto de cuatro cajas se lea como gato.
+const T_TAIL_H = 0.26, T_TAIL_W = 0.035;
+
+// --- vaca ------------------------------------------------------------------
+const W_LEG_H = 0.72, W_LEG_W = 0.13, W_LEG_D = 0.14, W_HIP_X = 0.20;
+const W_BODY_W = 0.62, W_BODY_H = 0.76, W_BODY_L = 1.55;
+const W_FRONT_Z = 0.55, W_BACK_Z = -0.55;
+const W_BODY_Y = W_LEG_H + W_BODY_H * 0.5;
+const W_HEAD = 0.34;
+const W_NECK_Y = W_BODY_Y + W_BODY_H * 0.12;
 
 // --- oveja / cabra ---------------------------------------------------------
 const S_BODY_W = 0.42, S_BODY_H = 0.48, S_BODY_L = 0.65, S_LEG_H = 0.42;
@@ -207,6 +274,61 @@ function buildGraph(roads) {
   return { nodes, adj };
 }
 
+// El grafo se suelda a 4 m, y en OSM hay finales de calle que se quedan a cinco
+// o a ocho de la siguiente: no es que no se pase, es que nadie puso el nodo. Eso
+// dejaba trozos de calle aislados donde los vecinos entraban y no salian, y
+// donde `buscarOficio` podia mandarte a hablar con alguien que no llega nunca.
+//
+// Se cosen solo los huecos CORTOS y solo si entre los dos puntos no hay
+// edificio: coser de mas seria abrir un atajo a traves de una casa, que es peor
+// que dejar el trozo suelto. Los huecos largos -de quince metros para arriba- se
+// dejan como estan, que esos si son calles separadas de verdad.
+const COSER_MAX = 11.0;
+
+function coserTrozos(nodes, adj, world) {
+  const grupo = new Array(nodes.length).fill(-1);
+  const grupos = [];
+  for (let i = 0; i < nodes.length; i++) {
+    if (grupo[i] >= 0) continue;
+    const g = grupos.length, pila = [i], miembros = [];
+    grupo[i] = g;
+    while (pila.length) {
+      const v = pila.pop();
+      miembros.push(v);
+      for (const u of adj[v]) if (grupo[u] < 0) { grupo[u] = g; pila.push(u); }
+    }
+    grupos.push(miembros);
+  }
+  if (grupos.length < 2) return 0;
+
+  // Del mas pequeno al mas grande: se cose cada trozo al primero que le quede a
+  // tiro, sin volver a calcular los grupos. Con catorce trozos no hace falta
+  // mas finura.
+  grupos.sort((a, b) => a.length - b.length);
+  let cosidos = 0;
+  for (let k = 0; k < grupos.length - 1; k++) {
+    const gr = grupos[k];
+    let mejor = COSER_MAX, a = -1, b = -1;
+    for (const i of gr) {
+      for (let j = 0; j < nodes.length; j++) {
+        if (grupo[j] === grupo[i]) continue;
+        const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].z - nodes[j].z);
+        if (d >= mejor) continue;
+        if (world.hayEdificioEntre(nodes[i].x, nodes[i].z, nodes[j].x, nodes[j].z)) continue;
+        mejor = d; a = i; b = j;
+      }
+    }
+    if (a < 0) continue;
+    adj[a].push(b);
+    adj[b].push(a);
+    const viejo = grupo[a], nuevo = grupo[b];
+    for (let i = 0; i < grupo.length; i++) if (grupo[i] === viejo) grupo[i] = nuevo;
+    cosidos++;
+  }
+  if (cosidos) console.log(`calles: ${cosidos} trozos sueltos cosidos a la red`);
+  return cosidos;
+}
+
 // Centroide de un poligono de edificio (coordenadas planas x,z intercaladas).
 function centroid(flat) {
   let cx = 0, cz = 0;
@@ -258,6 +380,7 @@ export class Vida {
     const { nodes, adj } = buildGraph(world.data.roads);
     this.nodes = nodes;
     this.adj = adj;
+    coserTrozos(nodes, adj, world);
 
     // Peso de arranque por nodo: calles alumbradas y con casas alrededor
     // pesan mucho mas (^1.5 para que el nucleo tire fuerte sin dejar el
@@ -270,10 +393,16 @@ export class Vida {
     this._objetos = [];
     this.ent = [];
     this._t = 0; // reloj de simulacion, lo actualiza update(); writeX() lo usa para el bamboleo
+    // Que fraccion del vecindario anda por la calle. Lo baja el tiempo que hace,
+    // desde main.js. A 1 estan todos fuera, que es como nacio esto.
+    this.fuera = 1;
 
     this.buildVillagers();
     this.buildDogs();
+    this.buildRey();
     this.buildSheep();
+    this.buildCats();
+    this.buildCows();
     this.buildChickens();
     this.buildBirds();
 
@@ -282,11 +411,14 @@ export class Vida {
     for (const w of this.villagers) this.writeVillager(w);
     for (const d of this.dogs) this.writeDog(d);
     for (const s of this.sheep) this.writeSheep(s);
+    for (const c of this.cats) this.writeCat(c);
+    for (const c of this.cows) this.writeCow(c);
     for (const c of this.chickens) this.writeChicken(c);
     for (const b of this.birds) this.writeBird(b);
     for (const mesh of this._objetos) mesh.instanceMatrix.needsUpdate = true;
 
     console.log(`vida: ${this.villagers.length} vecinos | ${this.dogs.length} perros`
+      + ` | ${this.cats.length} gatos | ${this.cows.length} vacas`
       + ` | ${this.sheep.length} ovejas | ${this.chickens.length} gallinas`
       + ` | ${this.birds.length} pajaros | ${nodes.length} nodos de calle`);
   }
@@ -323,7 +455,10 @@ export class Vida {
   }
 
   buildVillagers() {
-    const n = N_VILLAGERS;
+    // Una instancia mas que vecinos: la ultima es el rey, que usa el mismo
+    // cuerpo pero con sus colores y siempre con capa y sombrero. Sale mas corto
+    // que darle mallas propias y ademas se mueve con el mismo writeVillager().
+    const n = N_VILLAGERS + 1;
     const rng = rngFrom(4177);
 
     // Cabeza: mas ancha en el craneo que en la mandibula, con casquete de pelo.
@@ -374,7 +509,8 @@ export class Vida {
     const colTool = new Float32Array(n * 3);
 
     this.villagers = [];
-    for (let i = 0; i < n; i++) {
+    const porOficio = new Array(ROLES.length).fill(0);   // para repartir nombres
+    for (let i = 0; i < N_VILLAGERS; i++) {
       const role = rng.randi_range(0, ROLES.length - 1);
       colTorso.set(ROLE_COL[role], i * 3);
       const tono = 0.80 + rng.randf() * 0.42;      // moreno de sierra a mas claro
@@ -385,6 +521,10 @@ export class Vida {
       const node = this.pickSpawnNode(rng);
       const w = {
         id: i, tipo: 'vecino', role,
+        nombre: nombreDe(role, porOficio[role]++),
+        // Orden en el que se meten en casa cuando llueve o hiela. Fijo por
+        // vecino y sacado del mismo rng, para que sean siempre los mismos.
+        calle: rng.randf(),
         node, target: node, t: 0, prev: -1, paused: 0.4,
         speed: 1.15 + rng.randf() * 0.5,
         phase: rng.randf() * TAU,
@@ -403,15 +543,90 @@ export class Vida {
       this.villagers.push(w);
       this.ent.push(w);
     }
+    // El rey, en la ultima instancia. De negro entero, que es como vestia y como
+    // se le pinta siempre; el contraste lo pone la gorguera, que va en su propia
+    // malla porque no hay ninguna pieza del vecino que sirva de cuello.
+    colTorso.set(REY_NEGRO, N_VILLAGERS * 3);
+    colPiel.set([0.86, 0.84, 0.80], N_VILLAGERS * 3);    // palido, y a la luna mas
+    colPelo.set([0.055, 0.045, 0.040], N_VILLAGERS * 3);
+    colHat.set(REY_NEGRO, N_VILLAGERS * 3);
+    colTool.set([0, 0, 0], N_VILLAGERS * 3);             // no lleva apero
+
     this.vTorso.instanceColor = new THREE.InstancedBufferAttribute(colTorso, 3);
     this.vHead.instanceColor = new THREE.InstancedBufferAttribute(colPiel, 3);
     this.vHair.instanceColor = new THREE.InstancedBufferAttribute(colPelo, 3);
     this.vHat.instanceColor = new THREE.InstancedBufferAttribute(colHat, 3);
     this.vTool.instanceColor = new THREE.InstancedBufferAttribute(colTool, 3);
+
+    // La gorguera: un disco blanco justo bajo la barbilla. Es lo unico claro que
+    // lleva encima y por eso se le reconoce de lejos.
+    this.vGorguera = this.addPart(new THREE.InstancedMesh(
+      miembro(V_HEAD * 0.62, V_HEAD * 0.62, 0.07, 10, 1,
+        0, V_HEAD_Y - V_HEAD * 0.52, 0),
+      this.matPlain(REY_BLANCO), 1), 'ReyGorguera');
+  }
+
+  // El rey y su perro.
+  //
+  // No es de ningun encargo y no da ninguno: solo se aparece, y si se le habla
+  // contesta con acertijos. Sale de MEDIANOCHE a las dos, que es cuando la
+  // leyenda pone al perro negro aullando entre los andamios de la obra -a ese lo
+  // atraparia el padre Villacastin la noche del 21 de junio de 1577, siete anos
+  // despues de esto, y resulto ser el sabueso perdido del marques de las Navas-.
+  //
+  // Anda por la lonja y el entorno del Monasterio y no por todo el pueblo: no
+  // usa el grafo de calles, sino un paseo corto alrededor de un punto, que es lo
+  // que hace un hombre que sale a dar vueltas y no uno que va a algun sitio.
+  buildRey() {
+    const rng = rngFrom(1527);        // el ano en que nacio
+    const c = this.lonja();
+    this.rey = {
+      id: N_VILLAGERS, tipo: 'rey', role: -1, nombre: 'El hombre de negro',
+      centro: c, pos: new THREE.Vector3(c.x, 0, c.z),
+      destino: null, paused: 0, speed: 0.9, phase: 0, yaw: 0, walking: 0,
+      talla: 1.02, hat: 1, cloak: 1, tool: 0, calle: -1, rng,
+    };
+    this.perroRey = {
+      id: N_DOGS, tipo: 'perronegro', nombre: 'Un perro negro',
+      pos: new THREE.Vector3(c.x + 1.5, 0, c.z), yaw: 0, walking: 0,
+      phase: 0, rng,
+    };
+    this.ent.push(this.rey, this.perroRey);
+  }
+
+  // Centro del paseo: delante del Monasterio. Se saca de la huella mas grande,
+  // igual que hace world.js para saber cual es el Monasterio.
+  lonja() {
+    let mejor = null, area = -1;
+    for (const b of this.world.data.buildings) {
+      const f = b.p;
+      let a = 0;
+      for (let i = 0; i < f.length; i += 2) {
+        const j = (i + 2) % f.length;
+        a += f[i] * f[j + 1] - f[j] * f[i + 1];
+      }
+      a = Math.abs(a) * 0.5;
+      if (a > area) { area = a; mejor = b; }
+    }
+    if (!mejor) return { x: 1215, z: 1390 };
+    let cz = 0, minX = Infinity;
+    const n = mejor.p.length / 2;
+    for (let i = 0; i < mejor.p.length; i += 2) {
+      minX = Math.min(minX, mejor.p[i]);
+      cz += mejor.p[i + 1];
+    }
+    // A PONIENTE de la huella, que es donde esta la lonja: la explanada llana y
+    // libre de edificios delante de la fachada principal, la misma en la que
+    // aparece el jugador. Al sur del centro, ademas, que es de donde se lee la
+    // fachada entera en perspectiva en vez de como un muro.
+    return { x: minX - 40, z: cz / n + 63 };
   }
 
   buildDogs() {
-    const n = N_DOGS;
+    // Una mas: el perro del rey. Comparten malla y material, asi que el negro
+    // se consigue con color por instancia -antes no habia ninguno y los 30
+    // perros del pueblo eran el mismo perro-.
+    const n = N_DOGS + 1;
     const rng = rngFrom(9931);
     const mat = this.matPlain(DOG_COL);
     this.dBody = this.addPart(new THREE.InstancedMesh(box(D_BODY_W, D_BODY_H, D_BODY_L, 0, D_BODY_Y, 0), mat, n), 'PerroCuerpo');
@@ -424,8 +639,15 @@ export class Vida {
     this.dBL = this.addPart(new THREE.InstancedMesh(box(D_LEG_W, D_LEG_H, D_LEG_D, -D_HIP_X, -D_LEG_H * 0.5, D_BACK_Z), mat, n), 'PerroPataTI');
     this.dBR = this.addPart(new THREE.InstancedMesh(box(D_LEG_W, D_LEG_H, D_LEG_D, D_HIP_X, -D_LEG_H * 0.5, D_BACK_Z), mat, n), 'PerroPataTD');
 
+    // Todos a 1 (el color del material) menos el ultimo, que es el negro.
+    const colPerro = new Float32Array(n * 3).fill(1);
+    colPerro.set([PERRO_NEGRO, PERRO_NEGRO, PERRO_NEGRO * 1.1], N_DOGS * 3);
+    for (const m of [this.dBody, this.dHead, this.dFL, this.dFR, this.dBL, this.dBR]) {
+      m.instanceColor = new THREE.InstancedBufferAttribute(colPerro, 3);
+    }
+
     this.dogs = [];
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < N_DOGS; i++) {
       // Mismo reparto ponderado que los vecinos: al pesar por casas
       // cercanas, los perros de pueblo salen ya agrupados junto a las
       // fachadas sin necesitar una regla aparte.
@@ -455,6 +677,113 @@ export class Vida {
       if (this.world.freeAround(x, z)) return [x, z];
     }
     return null;
+  }
+
+  // Gatos. Andan por el grafo de calles como los perros, pero mas despacio y
+  // parandose mas: un gato de pueblo no va a ninguna parte con prisa. Mismo
+  // esqueleto de cajas que el perro, mas bajo y mas largo, y con el rabo tieso,
+  // que es lo que hace que cuatro cajas se lean como gato y no como perro chico.
+  buildCats() {
+    const n = N_CATS;
+    const rng = rngFrom(7717);
+    const mat = this.matPlain(CAT_COL);
+    this.tBody = this.addPart(new THREE.InstancedMesh(box(T_BODY_W, T_BODY_H, T_BODY_L, 0, T_BODY_Y, 0), mat, n), 'GatoCuerpo');
+    this.tHead = this.addPart(new THREE.InstancedMesh(box(T_HEAD, T_HEAD, T_HEAD, 0, T_BODY_Y + T_BODY_H * 0.25, T_BODY_L * 0.5 + T_HEAD * 0.35), mat, n), 'GatoCabeza');
+    this.tTail = this.addPart(new THREE.InstancedMesh(box(T_TAIL_W, T_TAIL_H, T_TAIL_W, 0, T_TAIL_H * 0.5, -T_BODY_L * 0.5), mat, n), 'GatoRabo');
+    const pata = (sx, sz) => box(T_LEG_W, T_LEG_H, T_LEG_D, sx * T_HIP_X, -T_LEG_H * 0.5, sz);
+    this.tFL = this.addPart(new THREE.InstancedMesh(pata(-1, T_FRONT_Z), mat, n), 'GatoPataDI');
+    this.tFR = this.addPart(new THREE.InstancedMesh(pata(1, T_FRONT_Z), mat, n), 'GatoPataDD');
+    this.tBL = this.addPart(new THREE.InstancedMesh(pata(-1, T_BACK_Z), mat, n), 'GatoPataTI');
+    this.tBR = this.addPart(new THREE.InstancedMesh(pata(1, T_BACK_Z), mat, n), 'GatoPataTD');
+
+    const col = new Float32Array(n * 3);
+    this.cats = [];
+    for (let i = 0; i < n; i++) {
+      col.set(CAT_TONO[rng.randi_range(0, CAT_TONO.length - 1)], i * 3);
+      const node = this.pickSpawnNode(rng);
+      const c = {
+        id: i, tipo: 'gato',
+        node, target: node, t: 0, prev: -1, paused: rng.randf() * 6,
+        speed: 1.1 + rng.randf() * 0.7,
+        phase: rng.randf() * TAU,
+        pos: new THREE.Vector3(this.nodes[node].x, 0, this.nodes[node].z),
+        yaw: rng.randf() * TAU,
+        walking: 0,
+        rng,
+      };
+      this.cats.push(c);
+      this.ent.push(c);
+    }
+    for (const m of [this.tBody, this.tHead, this.tTail, this.tFL, this.tFR, this.tBL, this.tBR]) {
+      m.instanceColor = new THREE.InstancedBufferAttribute(col, 3);
+    }
+  }
+
+  // Vacas. Pastan en el campo, no en la calle: se siembran lejos de cualquier
+  // fachada, que es lo que las saca del casco sin tener que buscar prados en los
+  // datos. Llevan patas, al contrario que las ovejas: a este tamano una vaca sin
+  // patas es un armario en un prado.
+  buildCows() {
+    const n = N_COWS;
+    const rng = rngFrom(3313);
+    const mat = this.matPlain(COW_COL);
+    // Cuerpo y cabeza en prisma tumbado, no en caja. Es la misma leccion que ya
+    // esta escrita arriba para los vecinos y para los arboles: lo que hace que
+    // un bicho parezca de Minecraft no son las proporciones, son las normales
+    // duras de BoxGeometry, que dan tres escalones planos de luz. En un perro de
+    // medio metro se perdona; en una vaca de metro y medio, no. Las patas siguen
+    // siendo cajas: a ese grosor no se distingue y sale mas barato.
+    const tumbado = (g) => { g.rotateX(Math.PI / 2); return g; };
+    this.wBody = this.addPart(new THREE.InstancedMesh(
+      tumbado(miembro(W_BODY_W * 0.5, W_BODY_W * 0.46, W_BODY_L, 8,
+        W_BODY_H / W_BODY_W)).translate(0, W_BODY_Y, 0), mat, n), 'VacaCuerpo');
+    this.wHead = this.addPart(new THREE.InstancedMesh(
+      tumbado(miembro(W_HEAD * 0.36, W_HEAD * 0.5, W_HEAD * 1.3, 6, 0.85))
+        .translate(0, 0, W_BODY_L * 0.5 + W_HEAD * 0.4), mat, n), 'VacaCabeza');
+    const pata = (sx, sz) => box(W_LEG_W, W_LEG_H, W_LEG_D, sx * W_HIP_X, -W_LEG_H * 0.5, sz);
+    this.wFL = this.addPart(new THREE.InstancedMesh(pata(-1, W_FRONT_Z), mat, n), 'VacaPataDI');
+    this.wFR = this.addPart(new THREE.InstancedMesh(pata(1, W_FRONT_Z), mat, n), 'VacaPataDD');
+    this.wBL = this.addPart(new THREE.InstancedMesh(pata(-1, W_BACK_Z), mat, n), 'VacaPataTI');
+    this.wBR = this.addPart(new THREE.InstancedMesh(pata(1, W_BACK_Z), mat, n), 'VacaPataTD');
+
+    const sx = this.world.data.size_m[0], sz = this.world.data.size_m[1];
+    const col = new Float32Array(n * 3);
+    this.cows = [];
+    for (let i = 0; i < n; i++) {
+      col.set(COW_TONO[rng.randi_range(0, COW_TONO.length - 1)], i * 3);
+      // Un prado es sitio libre CON sitio libre alrededor. Se sondea un anillo
+      // de ocho puntos a 35 m y se exige que todos esten despejados: sin eso las
+      // vacas salen en los corrales del casco viejo, que no es donde pasta una
+      // vaca. No vale `chocaEdificio(x, z, 35)`, que solo mira las nueve celdas
+      // de diez metros de alrededor y se le escapa lo que hay a treinta y cinco.
+      let home = null;
+      for (let t = 0; t < 80 && !home; t++) {
+        const x = rng.randf() * sx, z = rng.randf() * sz;
+        if (!this.world.freeAround(x, z)) continue;
+        let despejado = true;
+        for (let k = 0; k < 8 && despejado; k++) {
+          const a = k * TAU / 8;
+          despejado = this.world.freeAround(x + Math.cos(a) * 35, z + Math.sin(a) * 35);
+        }
+        if (despejado) home = [x, z];
+      }
+      if (!home) home = this.freeNear(sx * 0.5, sz * 0.5, 60, rng, 20) || [sx * 0.5, sz * 0.5];
+      const c = {
+        id: i, tipo: 'vaca',
+        home, pos: new THREE.Vector3(home[0], 0, home[1]),
+        target: [home[0], home[1]], t: 1, paused: rng.randf() * 8,
+        speed: 0.28 + rng.randf() * 0.16,
+        phase: rng.randf() * TAU,
+        yaw: rng.randf() * TAU,
+        walking: 0,
+        rng,
+      };
+      this.cows.push(c);
+      this.ent.push(c);
+    }
+    for (const m of [this.wBody, this.wHead, this.wFL, this.wFR, this.wBL, this.wBR]) {
+      m.instanceColor = new THREE.InstancedBufferAttribute(col, 3);
+    }
   }
 
   buildSheep() {
@@ -606,10 +935,12 @@ export class Vida {
 
   // -- escritura de matrices --------------------------------------------
 
-  writeVillager(w) {
+  // `dentro` = se ha metido en casa por el tiempo que hace: se escribe bajo el
+  // terreno en vez de dejarlo quieto a la vista.
+  writeVillager(w, dentro = false) {
     const world = this.world;
-    const y0 = world.heightAt(w.pos.x, w.pos.z);
-    const amp = w.walking ? 0.55 : 0;
+    const y0 = world.heightAt(w.pos.x, w.pos.z) - (dentro ? 4 : 0);
+    const amp = w.walking && !dentro ? 0.55 : 0;
     const ph = w.phase + this._t;
     // Andar de persona, no de muneco: las piernas mandan, los brazos van al
     // 40 % y desfasados, y el cuerpo bota un poco al doble de frecuencia
@@ -618,7 +949,7 @@ export class Vida {
     // automata a cualquier distancia.
     const swP = Math.sin(ph) * amp;                    // piernas
     const swB = Math.sin(ph - 0.45) * amp * 0.40;      // brazos
-    const bote = w.walking ? Math.abs(Math.sin(ph)) * 0.025 : 0;
+    const bote = w.walking && !dentro ? Math.abs(Math.sin(ph)) * 0.025 : 0;
     const y = y0 + bote;
     const t = w.talla;
 
@@ -642,10 +973,10 @@ export class Vida {
     w.pos.y = y0;
   }
 
-  writeDog(d) {
+  writeDog(d, dentro = false) {
     const world = this.world;
-    const y = world.heightAt(d.pos.x, d.pos.z);
-    const amp = d.walking ? 0.6 : 0;
+    const y = world.heightAt(d.pos.x, d.pos.z) - (dentro ? 4 : 0);
+    const amp = d.walking && !dentro ? 0.6 : 0;
     const ph = d.phase + this._t * 2.2;
     const s1 = Math.sin(ph) * amp, s2 = -s1;
     setInst(this.dBody, d.id, d.pos.x, y, d.pos.z, d.yaw);
@@ -654,7 +985,41 @@ export class Vida {
     setInst(this.dBR, d.id, d.pos.x, y + D_LEG_H, d.pos.z, d.yaw, s1);
     setInst(this.dFR, d.id, d.pos.x, y + D_LEG_H, d.pos.z, d.yaw, s2);
     setInst(this.dBL, d.id, d.pos.x, y + D_LEG_H, d.pos.z, d.yaw, s2);
-    d.pos.y = y;
+    if (!dentro) d.pos.y = y;
+  }
+
+  writeCat(c) {
+    const y = this.world.heightAt(c.pos.x, c.pos.z);
+    const amp = c.walking ? 0.55 : 0;
+    const ph = c.phase + this._t * 3.2;
+    const s1 = Math.sin(ph) * amp, s2 = -s1;
+    setInst(this.tBody, c.id, c.pos.x, y, c.pos.z, c.yaw);
+    setInst(this.tHead, c.id, c.pos.x, y, c.pos.z, c.yaw);
+    // El rabo ondea aunque el gato este quieto, que es la mitad de lo que hace
+    // un gato quieto.
+    setInst(this.tTail, c.id, c.pos.x, y + T_BODY_Y, c.pos.z, c.yaw,
+      -0.35 + 0.18 * Math.sin(this._t * 1.9 + c.phase), 0);
+    setInst(this.tFL, c.id, c.pos.x, y + T_LEG_H, c.pos.z, c.yaw, s1);
+    setInst(this.tBR, c.id, c.pos.x, y + T_LEG_H, c.pos.z, c.yaw, s1);
+    setInst(this.tFR, c.id, c.pos.x, y + T_LEG_H, c.pos.z, c.yaw, s2);
+    setInst(this.tBL, c.id, c.pos.x, y + T_LEG_H, c.pos.z, c.yaw, s2);
+    c.pos.y = y;
+  }
+
+  writeCow(c) {
+    const y = this.world.heightAt(c.pos.x, c.pos.z);
+    const amp = c.walking ? 0.38 : 0;
+    const ph = c.phase + this._t * 1.5;
+    const s1 = Math.sin(ph) * amp, s2 = -s1;
+    // Pastando baja la cabeza casi al suelo; andando la lleva alta.
+    const pace = c.walking ? 0 : 0.62 + 0.08 * Math.sin(this._t * 0.7 + c.phase);
+    setInst(this.wBody, c.id, c.pos.x, y, c.pos.z, c.yaw);
+    setInst(this.wHead, c.id, c.pos.x, y + W_NECK_Y, c.pos.z, c.yaw, pace);
+    setInst(this.wFL, c.id, c.pos.x, y + W_LEG_H, c.pos.z, c.yaw, s1);
+    setInst(this.wBR, c.id, c.pos.x, y + W_LEG_H, c.pos.z, c.yaw, s1);
+    setInst(this.wFR, c.id, c.pos.x, y + W_LEG_H, c.pos.z, c.yaw, s2);
+    setInst(this.wBL, c.id, c.pos.x, y + W_LEG_H, c.pos.z, c.yaw, s2);
+    c.pos.y = y;
   }
 
   writeSheep(s) {
@@ -686,15 +1051,81 @@ export class Vida {
     b.pos.y = y;
   }
 
+  // -- el rey ---------------------------------------------------------------
+
+  // De medianoche a las dos. Fuera de esa franja no esta: no se aleja ni se
+  // desvanece, sencillamente no ha estado nunca.
+  get horaDelRey() {
+    const h = this.hora;
+    return h >= 0 && h < 2;
+  }
+
+  stepRey(dt) {
+    const r = this.rey, d = this.perroRey;
+    const RADIO = 55;
+    if (r.paused > 0) {
+      r.paused -= dt;
+      r.walking = 0;
+    } else if (!r.destino) {
+      // Otro punto del paseo, dentro del radio. Un rey que sale a dar vueltas
+      // no va a ningun sitio: va y vuelve. Se descartan los puntos que caen
+      // dentro de un edificio: aparecerse es una cosa y atravesar la fachada del
+      // Monasterio es otra, y la segunda se lee como un fallo, no como leyenda.
+      for (let intento = 0; intento < 8 && !r.destino; intento++) {
+        const a = r.rng.randf() * TAU, rad = 12 + r.rng.randf() * RADIO;
+        const x = r.centro.x + Math.cos(a) * rad;
+        const z = r.centro.z + Math.sin(a) * rad;
+        if (!this.world.chocaEdificio(x, z, 0.8)) r.destino = { x, z };
+      }
+      if (!r.destino) r.paused = 2;      // rodeado: se queda parado un rato
+    } else {
+      const dx = r.destino.x - r.pos.x, dz = r.destino.z - r.pos.z;
+      const l = Math.hypot(dx, dz);
+      if (l < 0.6) { r.destino = null; r.paused = 1.5 + r.rng.randf() * 4; r.walking = 0; }
+      else {
+        const paso = Math.min(l, r.speed * dt);
+        r.pos.x += dx / l * paso;
+        r.pos.z += dz / l * paso;
+        r.yaw = Math.atan2(dx, dz);
+        r.walking = 1;
+      }
+    }
+    r.phase += dt * 4.0 * r.walking;
+
+    // El perro va detras y a un lado, y llega tarde: se queda mirando cosas.
+    const atras = 1.6, lado = 0.9;
+    const bx = r.pos.x - Math.sin(r.yaw) * atras - Math.cos(r.yaw) * lado;
+    const bz = r.pos.z - Math.cos(r.yaw) * atras + Math.sin(r.yaw) * lado;
+    const ddx = bx - d.pos.x, ddz = bz - d.pos.z;
+    const dl = Math.hypot(ddx, ddz);
+    if (dl > 0.25) {
+      const paso = Math.min(dl, (r.speed * 1.6) * dt);
+      d.pos.x += ddx / dl * paso;
+      d.pos.z += ddz / dl * paso;
+      d.yaw = Math.atan2(ddx, ddz);
+      d.walking = 1;
+    } else d.walking = 0;
+    d.phase += dt * 7.0 * d.walking;
+  }
+
   // -- bucle principal ----------------------------------------------------
 
   update(dt, t, camPos) {
     this._t = t;
-    let nV = 0, nD = 0, nS = 0, nC = 0, nB = 0;
+    let nV = 0, nD = 0, nS = 0, nC = 0, nB = 0, nT = 0, nW = 0;
 
     for (const w of this.villagers) {
       const dx = w.pos.x - camPos.x, dz = w.pos.z - camPos.z, dy = w.pos.y - camPos.y;
       if (dx * dx + dy * dy + dz * dz > RANGE2) continue;
+      // Con lluvia o con frio hay menos gente fuera. `w.calle` es fijo por
+      // vecino, asi que los que se meten en casa son siempre los mismos y el
+      // reparto no parpadea cada vez que arrecia.
+      //
+      // Y hay que ESCRIBIRLOS, no solo saltarlos: setInst escribe en una ranura
+      // fija por vecino, asi que uno que se salta se queda con su ultima matriz
+      // -o sea plantado en mitad de la calle sin mover los pies-. Hundido bajo
+      // el terreno no se ve, y volver a salir es una linea.
+      if (w.calle > this.fuera) { this.writeVillager(w, true); nV++; continue; }
       this.stepGraphWalker(w, dt, 0.3, 3.0);
       this.writeVillager(w);
       nV++;
@@ -712,6 +1143,23 @@ export class Vida {
       this.stepWander(s, dt, 6, 5);
       this.writeSheep(s);
       nS++;
+    }
+    for (const c of this.cats) {
+      const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, dy = c.pos.y - camPos.y;
+      if (dx * dx + dy * dy + dz * dz > RANGE2) continue;
+      // Se para mucho mas que el perro: 0.9 de pausa contra 0.15, y a la mitad
+      // de velocidad punta. Un gato cruza la calle y se sienta.
+      this.stepGraphWalker(c, dt, 0.9, 2.2);
+      this.writeCat(c);
+      nT++;
+    }
+    for (const c of this.cows) {
+      const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, dy = c.pos.y - camPos.y;
+      if (dx * dx + dy * dy + dz * dz > RANGE2) continue;
+      // Radio de pasto mas grande que el de la oveja y pausas mas largas.
+      this.stepWander(c, dt, 11, 9);
+      this.writeCow(c);
+      nW++;
     }
     for (const c of this.chickens) {
       const dx = c.pos.x - camPos.x, dz = c.pos.z - camPos.z, dy = c.pos.y - camPos.y;
@@ -736,7 +1184,8 @@ export class Vida {
     // matrices a la GPU. Con 220 vecinos de 7 piezas son ~100 KB por
     // fotograma regalados cuando no hay nadie cerca y no se ha movido nada.
     if (!this._grupos) {
-      this._grupos = { Vecino: [], Perro: [], Oveja: [], Gallina: [], Pajaro: [] };
+      this._grupos = { Vecino: [], Perro: [], Oveja: [], Gallina: [], Pajaro: [],
+        Gato: [], Vaca: [] };
       for (const m of this._objetos) {
         for (const k of Object.keys(this._grupos)) {
           if (m.name.startsWith(k)) this._grupos[k].push(m);
@@ -746,11 +1195,33 @@ export class Vida {
     const marcar = (lista) => {
       for (const m of lista) m.instanceMatrix.needsUpdate = true;
     };
+    // El rey. Se escribe siempre que sea su hora, este cerca o lejos: es uno
+    // solo y ahorrarse su matriz no ahorra nada.
+    if (this.horaDelRey) {
+      this.stepRey(dt);
+      this.writeVillager(this.rey);
+      setInst(this.vGorguera, 0, this.rey.pos.x,
+        this.world.heightAt(this.rey.pos.x, this.rey.pos.z), this.rey.pos.z,
+        this.rey.yaw, 0, 0, this.rey.talla);
+      this.writeDog(this.perroRey);
+      nV++; nD++;
+    } else {
+      // Fuera de su hora se hunde, igual que el vecino que se mete en casa.
+      this.writeVillager(this.rey, true);
+      setInst(this.vGorguera, 0, 0, -50, 0, 0, 0, 0, 0);
+      this.perroRey.pos.y = -50;
+      this.writeDog(this.perroRey, true);
+      nV++; nD++;
+    }
+    this.vGorguera.instanceMatrix.needsUpdate = true;
+
     if (nV) marcar(this._grupos.Vecino);
     if (nD) marcar(this._grupos.Perro);
     if (nS) marcar(this._grupos.Oveja);
     if (nC) marcar(this._grupos.Gallina);
     if (nB) marcar(this._grupos.Pajaro);
+    if (nT) marcar(this._grupos.Gato);
+    if (nW) marcar(this._grupos.Vaca);
   }
 
   // El primero que caiga dentro de maxDist, para el dialogo del jugador.
@@ -761,6 +1232,9 @@ export class Vida {
   cercano(pos, maxDist = 3.5) {
     let best = null, bestD = maxDist * maxDist;
     for (const e of this.ent) {
+      // Fuera de su hora, el rey y su perro no estan: no basta con hundirlos,
+      // porque `pos` sigue siendo el del paseo y se les hablaria a ciegas.
+      if ((e.tipo === 'rey' || e.tipo === 'perronegro') && !this.horaDelRey) continue;
       const dx = e.pos.x - pos.x, dz = e.pos.z - pos.z, dy = e.pos.y - pos.y;
       const d = dx * dx + dy * dy + dz * dz;
       if (d < bestD) { bestD = d; best = e; }
@@ -774,8 +1248,12 @@ export class Vida {
   // palabra dentro de `nombre`; ahora va suelto y con el id numerico, que es lo
   // que usan los dialogos para elegir frase de forma estable.
   ficha(e) {
-    const nombre = e.tipo === 'vecino' ? cap(ROLES[e.role])
+    const nombre = e.tipo === 'vecino' ? e.nombre
+      : e.tipo === 'rey' ? e.nombre
+      : e.tipo === 'perronegro' ? 'Un perro negro'
       : e.tipo === 'perro' ? 'Perro'
+      : e.tipo === 'gato' ? 'Gato'
+      : e.tipo === 'vaca' ? 'Vaca'
       : e.tipo === 'oveja' ? 'Oveja'
       : e.tipo === 'gallina' ? 'Gallina' : 'Pajaro';
     return {
@@ -798,11 +1276,24 @@ export class Vida {
     let best = null, bestD = Infinity;
     for (const v of this.villagers) {
       if (v.role !== r) continue;
+      // Y no vale el que se ha metido en casa. Sin esta linea, un dia de lluvia
+      // las indicaciones te mandan hacia alguien que esta cuatro metros bajo
+      // tierra: es el mismo fallo por otro camino, y por eso el arreglo va aqui
+      // y no solo en el bucle de dibujado.
+      if (v.calle > this.fuera) continue;
       const d = (v.pos.x - pos.x) ** 2 + (v.pos.z - pos.z) ** 2;
       if (d < bestD) { bestD = d; best = v; }
     }
     return best ? this.ficha(best) : null;
   }
-}
 
-function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  // Un vecino concreto por su id de ficha. Lo pide el encargo que manda volver
+  // con quien te lo dio: hay que poder decir por donde anda ESE, no el de su
+  // oficio que tengas mas cerca, que es otra persona.
+  buscarId(id) {
+    for (const v of this.villagers) {
+      if (`${v.tipo}${v.id}` === id) return this.ficha(v);
+    }
+    return null;
+  }
+}

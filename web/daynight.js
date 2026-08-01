@@ -1,11 +1,20 @@
 import * as THREE from 'three';
+import { clima, climaFijo } from './clima.js';
 
-// Ciclo de dia y noche.
+// Ciclo de dia y noche, y el tiempo que hace.
 //
 // El sol no gira en un plano: se calcula su posicion real para la latitud del
 // pueblo y el dia del ano, asi que en octubre sale tarde por el sudeste y se
 // pone pronto, y el mediodia no llega al cenit. La luna se coloca opuesta al
 // sol, que es donde esta una luna llena de verdad.
+//
+// El dia del ano estuvo clavado en el 300 desde el principio, o sea que toda esa
+// cuenta astronomica servia para un solo dia de finales de octubre. Ahora corre,
+// y con el corre el clima: esta clase es la duena de las dos cosas porque el
+// clima no tiene ninguna entrada que esta no tuviera ya -dia y hora- y toda su
+// salida cae sobre cosas que esta ya escribe: la niebla, el sol, el ambiente y
+// los colores del cielo. Un modulo aparte seria un objeto mas que instanciar,
+// cablear y sincronizar con este mismo reloj.
 //
 // Teclas: [ y ] mueven una hora, P pausa el reloj.
 
@@ -20,6 +29,11 @@ const DAY_HOR = [0.60, 0.68, 0.78];
 const DUSK_HOR = [0.72, 0.32, 0.16];
 const NIGHT_GROUND = [0.008, 0.009, 0.014];
 const DAY_GROUND = [0.16, 0.15, 0.13];
+
+// Hacia donde tira todo cuando el cielo se tapa. Un dia cubierto de sierra es
+// gris plano, sin azul arriba y sin naranja en el horizonte.
+const NUBE_DIA = [0.46, 0.48, 0.51];
+const NUBE_NOCHE = [0.038, 0.042, 0.052];
 
 const AMB_NIGHT = [0.34, 0.42, 0.62];
 const AMB_DAY = [0.54, 0.56, 0.62];
@@ -119,13 +133,18 @@ const SKY_FRAG = `
 `;
 
 export class DayNight {
-  constructor(scene, world, lat = 40.59) {
+  constructor(scene, world, lat = 40.59, semilla = 1) {
     this.world = world;
     this.lat = lat;
+    this.semilla = semilla >>> 0 || 1;
     this.hour = 21.5;
     this.daySeconds = 480.0;     // lo que dura un dia completo en tiempo real
-    this.dayOfYear = 300;        // finales de octubre
+    this.dayOfYear = 300;        // finales de octubre, que es como nacio esto
     this.paused = false;
+    // null = el tiempo que toque; una clave de ESTADOS = el que se ha impuesto
+    // desde la barra o con ?clima=.
+    this.climaForzado = null;
+    this.clima = null;           // lo rellena apply()
 
     this.sun = new THREE.DirectionalLight(0xffffff, 0);
     this.moon = new THREE.DirectionalLight(0xffffff, 0);
@@ -186,7 +205,14 @@ export class DayNight {
     // cielo seguia vivo y es lo que se quiere para mirar una noche fija.
     this.skyMat.uniforms.tiempo.value += dt;
     if (!this.paused) {
-      this.hour = mod(this.hour + 24 * dt / this.daySeconds, 24);
+      // El calendario avanza cuando el reloj da la vuelta. Con daySeconds = 480
+      // un ano son 48 h de juego, asi que esto es por correccion y no por
+      // jugabilidad: las estaciones se ven por la barra o con ?dia=. No tocar
+      // daySeconds para acelerarlo, que el ciclo diurno esta calibrado y es lo
+      // que se mira; el mando para eso seria otro.
+      const h = this.hour + 24 * dt / this.daySeconds;
+      if (h >= 24) this.dayOfYear = (this.dayOfYear % 365) + 1;
+      this.hour = mod(h, 24);
       this.apply();
     }
     // El cielo y la caja de sombra viajan con la camara.
@@ -214,16 +240,30 @@ export class DayNight {
   }
 
   apply() {
+    // El clima primero, que de el dependen la luz, la niebla y el cielo. Forzado
+    // y automatico salen del mismo constructor, asi que no puede haber un campo
+    // que solo rellene uno de los dos caminos.
+    const c = this.climaForzado
+      ? climaFijo(this.climaForzado, this.dayOfYear, this.hour, this.semilla)
+      : clima(this.semilla, this.dayOfYear, this.hour);
+    this.clima = c;
+    const nub = c.nublado;
+
     const toSun = this.directionToSun();
     const s = toSun.y;                        // seno de la elevacion solar
     const dia = smoothstep(-0.05, 0.16, s);
     const noche = smoothstep(0.10, -0.10, s);
-    // Pico en el horizonte, tanto al alba como al ocaso.
-    const crep = clamp(1 - Math.abs(s) / 0.20, 0, 1);
+    // Pico en el horizonte, tanto al alba como al ocaso. Se apaga con las nubes:
+    // sin esto un ocaso de lluvia sale igual de naranja que uno raso, que seria
+    // lo mas raro de ver de todo esto. El sol no tine el horizonte a traves de un
+    // cielo cubierto porque no llega.
+    const crep = clamp(1 - Math.abs(s) / 0.20, 0, 1) * (1 - nub);
 
     // La luz viaja al reves que la direccion al sol.
     this.sun.userData.dir = toSun;
-    this.sun.intensity = 2.6 * dia;
+    // Bajo cubierto la directa casi desaparece, y las sombras se ablandan solas
+    // al irse. No se toca castShadow ni autoUpdate: ver el aviso de mas abajo.
+    this.sun.intensity = 2.6 * dia * (1 - 0.85 * nub);
     const sunCol = lerp3(SUN_HIGH, SUN_LOW, clamp(1 - s / 0.30, 0, 1));
     this.sun.color.setRGB(...sunCol, THREE.LinearSRGBColorSpace);
     // castShadow y autoUpdate no se tocan nunca. Cambiar castShadow recompila
@@ -243,31 +283,48 @@ export class DayNight {
     this.moon.intensity = 0.8 * noche;
     this.moon.color.setRGB(...MOON, THREE.LinearSRGBColorSpace);
 
+    // El cielo tapado se va a gris: se pierde el azul de arriba y el naranja del
+    // horizonte, que es de lo que se compone un dia cubierto de sierra.
+    const gris = lerp3(NUBE_NOCHE, NUBE_DIA, dia);
+    const conNubes = (col) => lerp3(col, gris, nub * 0.85);
+
     const hor = lerp3(lerp3(NIGHT_HOR, DAY_HOR, dia), DUSK_HOR, crep * 0.8);
     const u = this.skyMat.uniforms;
-    u.topColor.value.setRGB(...lerp3(NIGHT_TOP, DAY_TOP, dia), THREE.LinearSRGBColorSpace);
-    u.horizonColor.value.setRGB(...hor, THREE.LinearSRGBColorSpace);
-    u.groundHorizon.value.setRGB(...hor, THREE.LinearSRGBColorSpace);
+    u.topColor.value.setRGB(...conNubes(lerp3(NIGHT_TOP, DAY_TOP, dia)),
+      THREE.LinearSRGBColorSpace);
+    u.horizonColor.value.setRGB(...conNubes(hor), THREE.LinearSRGBColorSpace);
+    u.groundHorizon.value.setRGB(...conNubes(hor), THREE.LinearSRGBColorSpace);
     u.groundBottom.value.setRGB(...lerp3(NIGHT_GROUND, DAY_GROUND, dia),
       THREE.LinearSRGBColorSpace);
     u.sunColor.value.setRGB(...sunCol, THREE.LinearSRGBColorSpace);
     u.sunDir.value.copy(toSun);
     u.moonDir.value.copy(toSun).negate();      // la luna, opuesta al sol
-    u.sunEnergy.value = dia;
-    u.noche.value = noche;
+    u.sunEnergy.value = dia * (1 - nub);
+    // Apaga estrellas y luna bajo las nubes sin tocar ni una linea de SKY_FRAG:
+    // el shader ya las multiplica por `noche`, asi que basta con mentirle.
+    u.noche.value = noche * (1 - nub);
 
     this.ambient.color.setRGB(...lerp3(AMB_NIGHT, AMB_DAY, dia), THREE.LinearSRGBColorSpace);
     // Godot suma la ambiental como color * energia * albedo. three la pasa por
     // BRDF_Lambert, que divide entre PI. Sin este factor la sombra sale tres
     // veces mas oscura que en el original y el pueblo de dia parece de noche.
-    this.ambient.intensity = (0.5 + (0.95 - 0.5) * dia) * Math.PI;
+    //
+    // Con nubes sube: lo que se pierde en directa se gana en relleno, que es
+    // justo lo que hace que un dia cubierto no tenga sombras pero se vea.
+    this.ambient.intensity = (0.5 + (0.95 - 0.5) * dia) * (1 + 0.35 * nub) * Math.PI;
 
-    this.fog.color.setRGB(...lerp3(lerp3(FOG_NIGHT, FOG_DAY, dia), DUSK_HOR, crep * 0.5),
+    this.fog.color.setRGB(
+      ...conNubes(lerp3(lerp3(FOG_NIGHT, FOG_DAY, dia), DUSK_HOR, crep * 0.5)),
       THREE.LinearSRGBColorSpace);
-    this.fog.density = 0.0013 + (0.00075 - 0.0013) * dia;
+    // La niebla de estancamiento de esta sierra no es bruma: son 59 dias al ano
+    // y con el multiplicador de 9 el Monasterio desaparece a unos 150 m, que es
+    // lo que hace en noviembre visto desde la carretera de la estacion.
+    this.fog.density = (0.0013 + (0.00075 - 0.0013) * dia) * c.niebla;
 
     // Se encienden un poco antes de que anochezca del todo, como en la vida.
     this.world.setNight(smoothstep(0.16, -0.02, s));
+    // Y el tiempo, que es quien pinta el pasto seco, la nieve y el humo.
+    if (this.world.setClima) this.world.setClima(c);
   }
 }
 

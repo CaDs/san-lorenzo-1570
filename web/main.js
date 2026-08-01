@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { World, vuela } from './world.js';
 import { DayNight } from './daynight.js';
+import { Barra } from './ui.js';
 import { Player } from './player.js';
 import { Minimap } from './minimap.js';
 import { Vida } from './npcs.js';
@@ -54,6 +55,8 @@ const BLOOM_THRESHOLD = 1.0;
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) ? parseFloat(q.get(k)) : d);
+// ?dia=800 o ?dia=0 no tienen que dejar el calendario en un sitio imposible.
+const clampDia = (d) => (Number.isFinite(d) ? Math.min(365, Math.max(1, Math.round(d))) : 300);
 
 const canvas = document.getElementById('vista');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
@@ -71,8 +74,22 @@ const camera = new THREE.PerspectiveCamera(68, W / H, 0.05, 3000);
 const world = await World.load();
 scene.add(world);
 
-const cielo = new DayNight(scene, world, world.data.lat);
-if (q.has('hour')) { cielo.hour = num('hour', 21.5); cielo.paused = true; cielo.apply(); }
+// La semilla manda sobre los encargos (tramas.js) y sobre el tiempo que hace
+// (clima.js): sin ?seed= cada partida trae otra cosa, y con ?seed=1234 se repite
+// para poder contarla o depurarla. Va antes que el cielo porque el cielo la
+// necesita para sortear el tiempo.
+const semilla = q.has('seed') ? (num('seed', 1) >>> 0)
+  : (1 + Math.floor(Math.random() * 999999));
+
+const cielo = new DayNight(scene, world, world.data.lat, semilla);
+if (q.has('hour')) { cielo.hour = num('hour', 21.5); cielo.paused = true; }
+// ?dia= es el dia del ano, de 1 a 365. Es el mando de las estaciones: el sol de
+// enero es el de enero, y el tiempo se sortea con los pesos de ese mes.
+if (q.has('dia')) cielo.dayOfYear = clampDia(num('dia', 300));
+// ?clima=nieve impone un estado. Con nombre y no con un numero, que es lo que
+// alguien escribe de verdad.
+if (q.has('clima')) cielo.climaForzado = q.get('clima');
+cielo.apply();
 
 const player = new Player(camera, world, canvas);
 player.spawn(num('x', SPAWN.x), num('z', SPAWN.z), num('yaw', SPAWN.yaw));
@@ -84,13 +101,9 @@ scene.add(...vida.objetos);
 // `lugares` sabe como se llaman las calles y los edificios de verdad; `misiones`
 // se lo pasa a los dialogos para que un vecino pueda mandarte a un sitio.
 const lugares = new Lugares(world);
-// Los encargos se generan (tramas.js) a partir de una semilla: sin ?seed= cada
-// partida trae otros, y con ?seed=1234 se repite el mismo para poder contarlo o
-// depurarlo. El punto de aparicion entra en el generador para que no ponga un
+// El punto de aparicion entra en el generador de encargos para que no ponga un
 // destino a veinte pasos del jugador.
-const semilla = q.has('seed') ? (num('seed', 1) >>> 0)
-  : (1 + Math.floor(Math.random() * 999999));
-const misiones = new Misiones(world, vida, lugares, semilla, player.pos);
+const misiones = new Misiones(world, vida, lugares, semilla, player.pos, cielo.clima);
 
 const hud = document.getElementById('hud');
 hud.width = W; hud.height = H;
@@ -132,6 +145,10 @@ addEventListener('resize', () => {
 // fotograma, y con un `let` mas abajo el acceso caeria en la zona muerta.
 let reloj = 0;
 
+// La barra de mandos. Se construye oculta y sale al entrar al pueblo.
+const barra = new Barra({ cielo, misiones });
+let ticBarra = 0;
+
 // La portada esta puesta desde el HTML, asi que el titulo se ve desde el primer
 // instante y el mundo se levanta detras. Antes se descubria al final y eran
 // siete segundos de "cargando" en minusculas sobre negro, que es justo la peor
@@ -148,6 +165,7 @@ document.getElementById('sub').innerHTML
 portada.addEventListener('click', () => {
   portada.classList.add('fuera');
   hud.style.visibility = 'visible';
+  barra.verEn(true);               // la barra sale al entrar, no sobre el titulo
   // En algunos contextos (extensiones, iframes) el bloqueo de puntero lanza.
   // Que no se pueda capturar el raton no es motivo para no entrar al juego.
   try { canvas.requestPointerLock(); } catch { /* se entra igual */ }
@@ -155,19 +173,34 @@ portada.addEventListener('click', () => {
 }, { once: true });
 
 Object.assign(window, { THREE, scene, camera, world, player, cielo, renderer,
-  vida, misiones, lugares });
+  vida, misiones, lugares, barra });
 
 function paso(dt) {
   reloj += dt;
   player.update(dt);
   cielo.update(dt, player.pos);
   world.update(dt, reloj, player.pos);
+  // Con lluvia o con frio hay menos gente en la calle. El suelo de 0,3 no es
+  // decoracion: con 220 vecinos y ocho oficios salen unos 27 de cada uno, y por
+  // debajo de ahi un encargo puede pedir un oficio del que no quede nadie fuera.
+  // ponytail: el que se mete en casa se hunde de golpe cuatro metros. Con el
+  // tiempo cambiando poco a poco cruzan el umbral de uno en uno y no se nota,
+  // pero si alguna vez se ve el salto, la salida es meterlos solo cuando estan
+  // fuera de camara, no interpolar la altura.
+  const cl = cielo.clima;
+  vida.fuera = Math.max(0.3, 1 - 0.55 * cl.lluvia - 0.55 * cl.nieve - 0.30 * cl.frio);
   vida.update(dt, reloj, player.pos);
   misiones.hora = cielo.hour;      // los saludos cambian con la hora del dia
+  vida.hora = cielo.hour;          // y el rey solo se aparece de medianoche a las dos
+  misiones.clima = cl;             // y hay encargos que solo salen con nieve o helada
   misiones.update(dt, player);
   composer.render();
   minimapa.draw(player.pos, player.yaw);
   misiones.dibujar(hudCtx, W, H);      // despues del minimapa: no lo pisa
+  // El reloj de la barra corre solo, asi que hay que repintarla; medio segundo
+  // sobra y evita reescribir el DOM sesenta veces por segundo para nada.
+  ticBarra -= dt;
+  if (ticBarra <= 0) { barra.tic(); ticBarra = 0.5; }
   window.__frames = (window.__frames || 0) + 1;
 }
 
@@ -263,7 +296,7 @@ if (q.has('test')) {
   const vc = world.getObjectByName('Cubiertas').geometry.getAttribute('position');
   const fuera = (x, z) => {
     let d = Infinity;
-    for (const flat of player.cerca(x, z)) {
+    for (const flat of world.fachadasCerca(x, z)) {
       const p = [];
       for (let j = 0; j < flat.length; j += 2) p.push([flat[j], flat[j + 1]]);
       d = Math.min(d, vuela(p, x, z));
