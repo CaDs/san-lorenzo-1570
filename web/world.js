@@ -1143,7 +1143,33 @@ export class World extends THREE.Group {
       if (Math.abs(area2) * 0.5 > 600) seed *= 0.28;
 
       const base = b.b;
-      const suelo = base + (b.t - base - b.h);
+      // El suelo de la casa: de donde arranca la planta baja, y de donde el
+      // sombreador mide TODO -el zocalo, las hiladas de entramado y si en una
+      // celda hay ventana o no-.
+      //
+      // Salia de `b.t - b.h`, o sea de dos numeros de OSM, y esos dos numeros no
+      // saben por donde va el terreno. De las 3.545 casas, 858 tenian ese suelo a
+      // mas de metro y medio del suelo de verdad y la peor a 12,2 m. Cuando cae
+      // por ENCIMA del terreno, el sombreador pinta zocalo de piedra desde ahi
+      // para abajo y ademas apaga los huecos -`existe` lleva step(plinto, lh)-:
+      // sale una franja ciega de varios metros al pie de la fachada, sin ventanas
+      // y sin entramado, y el entramado empieza a media altura. Eso es lo que se
+      // veia desde la Plaza de la Constitucion.
+      //
+      // Se ancla al terreno mas BAJO de la huella, no al medio. En una casa en
+      // cuesta ninguna cota unica vale para las cuatro esquinas: con la mas baja,
+      // lo que sobra queda enterrado cuesta arriba -y enterrado no se ve-,
+      // mientras que con la media o la mas alta la franja ciega vuelve a asomar
+      // por el lado de abajo, que es justo el fallo que se esta quitando.
+      let suelo = Infinity;
+      for (let i = 0; i < flat.length; i += 2) {
+        const j = (i + 2) % flat.length;
+        for (let k = 0; k <= 4; k++) {
+          const t = k / 4;
+          suelo = Math.min(suelo, this.heightAt(flat[i] + (flat[j] - flat[i]) * t,
+            flat[i + 1] + (flat[j + 1] - flat[i + 1]) * t));
+        }
+      }
       const plantas = Math.min(Math.max(Math.round(b.h / STOREY_DIV), 1), MAX_STOREYS);
       const top = suelo + plantas * STOREY_H + seed * 0.45;
 
