@@ -30,7 +30,13 @@ const IDX_REY = N_VILLAGERS + N_PASTORES;
 const N_DOGS = 30;
 const N_SHEEP = 96;
 const N_CHICKENS = 70;
-const N_CATS = 34;
+// 34 gatos daban un pueblo sin gatos: a 0,30 m a la cruz un gato mide la mitad
+// que un perro, o sea que se distingue desde la mitad de distancia y cubre la
+// CUARTA parte de superficie util; y ademas se para el 90% del tiempo, asi que
+// tampoco se delata moviendose. Medido: desde una calle cualquiera, el gato mas
+// cercano quedaba a 412 m de mediana. Con 90 sigue habiendo menos de uno por
+// manzana, que es lo que hay en un pueblo.
+const N_CATS = 90;
 const N_COWS = 40;
 const N_BIRDS = 24;
 
@@ -123,11 +129,27 @@ const DOG_COL = [0.10, 0.075, 0.05];
 const SHEEP_COL = [0.20, 0.19, 0.17];
 const CHICKEN_COL = [0.21, 0.17, 0.12];
 const BIRD_COL = [0.06, 0.06, 0.07];
-// Gato de pueblo: pardo, atigrado, negro y blanco sucio. Multiplican al color
-// base, que es el del material.
-const CAT_COL = [0.13, 0.10, 0.075];
+// Las capas de gato de pueblo, en color absoluto y no en brillo.
+//
+// Antes esto eran cuatro multiplicadores sobre un pardo, o sea el mismo gato
+// cuatro veces con mas o menos luz: el comentario prometia "negro y blanco
+// sucio" y lo que salia era pardo oscuro y pardo claro. Un multiplicador no
+// puede virar un pardo a naranja ni a gris; hace falta poner el color entero.
+//
+// Por eso el material va en blanco y el color de instancia ES la capa. Y son las
+// que hay: el atigrado pardo es el gato europeo de siempre, el naranja y el
+// negro son igual de comunes, y el carey sale casi siempre hembra. Valores en
+// lineal y en el mismo rango de albedo que el resto del atrezo.
+const CAT_COL = [1.0, 1.0, 1.0];
 const CAT_TONO = [
-  [1.0, 1.0, 1.0], [0.55, 0.55, 0.6], [1.35, 1.25, 1.15], [0.30, 0.28, 0.30],
+  [0.115, 0.085, 0.055],   // pardo atigrado, el mas comun
+  [0.100, 0.100, 0.102],   // atigrado gris
+  [0.030, 0.028, 0.032],   // negro
+  [0.225, 0.215, 0.195],   // blanco sucio
+  [0.215, 0.105, 0.040],   // naranja
+  [0.130, 0.072, 0.038],   // carey
+  [0.165, 0.130, 0.088],   // pardo claro
+  [0.062, 0.058, 0.055],   // pardo muy oscuro, casi negro
 ];
 // Vaca serrana: parda oscura, y alguna berrenda.
 const COW_COL = [0.115, 0.075, 0.050];

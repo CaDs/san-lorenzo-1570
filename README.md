@@ -47,6 +47,8 @@ make dev        # http://localhost:8000/web/
 - **460 vecinos** de ocho oficios recorriendo las calles, con perros, gatos,
   ovejas, gallinas y pájaros; y vacas paciendo en los campos, lejos del casco.
   Más 16 pastores en el monte, que no bajan al pueblo. Se puede hablar con todos.
+  Los 90 gatos vienen en ocho capas: pardo atigrado, gris, negro, blanco sucio,
+  naranja, carey y dos pardos más.
 - **Encargos procedurales y sin fin**: se pide uno nuevo cada vez que se cierra
   el anterior, armados con los oficios que andan por la calle y los sitios con
   nombre real de OSM —los lobos de la dehesa, el agua de la argamasa, la campana
