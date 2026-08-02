@@ -474,8 +474,25 @@ export class Sonido {
     hacer();
   }
 
+  // El interruptor de la barra. Y ademas el UNICO sitio donde se puede volver a
+  // arrancar un contexto que se quedo dormido.
+  //
+  // arrancar() prueba a despertarlo una vez, dentro del clic de la portada, y si
+  // eso falla -Safari, la politica de reproduccion automatica, la pestana en
+  // segundo plano- no habia quien lo volviera a intentar NUNCA. El chip cambiaba
+  // de "silencio" a "sonido" y seguia sin oirse nada, que es la peor forma de
+  // estar roto: el juego te dice que si.
+  //
+  // Aqui vale porque esto se llama desde un clic de verdad, que es exactamente el
+  // gesto que el navegador pide para dejar sonar.
   silencio(v) {
     this.on = v;
+    if (!this.ctx) return;
+    if (v && this.ctx.state !== 'running') {
+      this.ctx.resume().then(() => {
+        this.estado = this.ctx.state === 'running' ? 'sonando' : 'bloqueado';
+      }).catch(() => { this.estado = 'bloqueado'; });
+    }
     if (this.master) {
       this.master.gain.setTargetAtTime(v ? this.vol : 0, this.ctx.currentTime, 0.05);
     }
