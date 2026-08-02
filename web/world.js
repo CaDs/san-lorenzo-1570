@@ -1137,6 +1137,17 @@ export class World extends THREE.Group {
         if (Math.hypot(poly[i][0] - q[0], poly[i][1] - q[1]) < 1e-6) poly.splice(i, 1);
       }
 
+      // Se mete el contorno unos centimetros hacia dentro, y cada casa los suyos.
+      //
+      // OSM cartografia las casas de una manzana pared con pared, y a menudo dos
+      // huellas comparten la arista con unos milimetros de diferencia o se pisan
+      // un poco. Extruidas tal cual, esos dos muros quedan casi coplanarios y se
+      // pelean por el z-buffer: a distancia se ve como si la fachada fuera medio
+      // transparente y se colara la de detras. Con un retranqueo de 5 a 13 cm,
+      // distinto por casa, los dos muros ya no comparten plano y el parpadeo se
+      // acaba. A 480x270 esa junta es subpixel a partir de diez metros.
+      encoger(poly, 0.05 + fract(Math.sin(flat[0] * 2.113) * 4193.7) * 0.08);
+
       // Semilla estable por casa: decide material, huecos y tipo de cubierta.
       let seed = fract(Math.sin(flat[0] * 0.7321 + flat[1] * 1.3177) * 43758.5453);
       // Una nave de 600 m2 no se levanta con entramado de madera.
@@ -1161,15 +1172,24 @@ export class World extends THREE.Group {
       // lo que sobra queda enterrado cuesta arriba -y enterrado no se ve-,
       // mientras que con la media o la mas alta la franja ciega vuelve a asomar
       // por el lado de abajo, que es justo el fallo que se esta quitando.
-      let suelo = Infinity;
+      let sueloMin = Infinity, sueloMax = -Infinity;
       for (let i = 0; i < flat.length; i += 2) {
         const j = (i + 2) % flat.length;
         for (let k = 0; k <= 4; k++) {
           const t = k / 4;
-          suelo = Math.min(suelo, this.heightAt(flat[i] + (flat[j] - flat[i]) * t,
-            flat[i + 1] + (flat[j + 1] - flat[i + 1]) * t));
+          const y = this.heightAt(flat[i] + (flat[j] - flat[i]) * t,
+            flat[i + 1] + (flat[j + 1] - flat[i + 1]) * t);
+          sueloMin = Math.min(sueloMin, y);
+          sueloMax = Math.max(sueloMax, y);
         }
       }
+      // El alto de la casa se cuenta desde el terreno MAS ALTO de la huella. Con
+      // el mas bajo -que es lo que hubo entre medias- una casa larga en cuesta
+      // acababa por debajo del terreno cuesta arriba: 116 casas enterradas y la
+      // peor 16,7 m. Con el mas alto, las plantas se cuentan desde donde el
+      // terreno manda y por abajo sobra muro, que es lo que hace una casa en
+      // cuesta de verdad.
+      const suelo = sueloMax;
       const plantas = Math.min(Math.max(Math.round(b.h / STOREY_DIV), 1), MAX_STOREYS);
       const top = suelo + plantas * STOREY_H + seed * 0.45;
 
@@ -1177,7 +1197,11 @@ export class World extends THREE.Group {
         this.monastery(poly, base, suelo, wall, roof, abrirPaso);
         return;
       }
-      extrudeRing(poly, base, top, [seed, suelo, 0], wall, abrirPaso);
+      // El suelo que ve el sombreador NO es este `suelo`: va por vertice, sacado
+      // del terreno bajo cada esquina del muro. `suelo` solo decide cuantas
+      // plantas caben y donde acaba el tejado.
+      extrudeRing(poly, base, top, [seed, suelo, 0], wall, abrirPaso,
+        (x, z) => this.heightAt(x, z));
 
       // Con patio, la cubierta va en anillo y el patio se queda abierto. 97
       // casas del pueblo lo tienen y hasta ahora se rellenaban macizas, que es
@@ -1187,7 +1211,8 @@ export class World extends THREE.Group {
         for (const h of huecos) {
           // Los muros del patio miran hacia DENTRO del patio, o sea al reves
           // que la fachada: se extruye el anillo al reves.
-          extrudeRing([...h].reverse(), base, top, [seed, suelo, 0], wall, abrirPaso);
+          extrudeRing([...h].reverse(), base, top, [seed, suelo, 0], wall, abrirPaso,
+            (x, z) => this.heightAt(x, z));
         }
         const col = mul(seed < 0.45 ? ROOF_THATCH : ROOF_TILE,
           0.82 + 0.36 * fract(seed * 7.13));
@@ -2020,7 +2045,37 @@ const DINTEL_MIN = 0.7;
 //
 // Hacia falta: abrir la colision sin abrir la geometria deja al jugador
 // atravesando un muro macizo como un fantasma, que se lee peor que el muro.
-function extrudeRing(ring, base, top, uv, wall, abrir = null) {
+// `sueloEn` da la cota del suelo bajo un punto del muro, y va POR VERTICE. Es lo
+// que permite que el zocalo y las hiladas sigan al terreno en una casa en cuesta
+// en vez de referirse todas a una cota unica que solo acierta en un lado.
+// Mete un anillo `d` metros hacia dentro, moviendo cada vertice por la bisectriz
+// de las dos aristas que concurren en el. No es un offset de poligono completo
+// -no parte aristas ni resuelve autointersecciones- y no hace falta que lo sea:
+// con 10 cm sobre huellas de casa no hay nada que resolver, y a cambio son diez
+// lineas en vez de una libreria.
+function encoger(poly, d) {
+  const n = poly.length;
+  if (n < 3) return;
+  const orig = poly.map((p) => [p[0], p[1]]);
+  for (let i = 0; i < n; i++) {
+    const a = orig[(i - 1 + n) % n], b = orig[i], c = orig[(i + 1) % n];
+    // Normales hacia dentro de las dos aristas, con el anillo en antihorario.
+    const e1 = [b[0] - a[0], b[1] - a[1]], e2 = [c[0] - b[0], c[1] - b[1]];
+    const l1 = Math.hypot(e1[0], e1[1]) || 1, l2 = Math.hypot(e2[0], e2[1]) || 1;
+    const n1 = [e1[1] / l1, -e1[0] / l1], n2 = [e2[1] / l2, -e2[0] / l2];
+    let bx = n1[0] + n2[0], bz = n1[1] + n2[1];
+    const bl = Math.hypot(bx, bz);
+    if (bl < 1e-4) continue;                 // arista que se dobla sobre si misma
+    bx /= bl; bz /= bl;
+    // En una esquina cerrada la bisectriz es corta y hay que alargar el paso, o
+    // el retranqueo sale menor justo donde mas se nota.
+    const k = Math.min(d / Math.max(bl * 0.5, 0.25), d * 3);
+    poly[i][0] = b[0] + bx * k;
+    poly[i][1] = b[1] + bz * k;
+  }
+}
+
+function extrudeRing(ring, base, top, uv, wall, abrir = null, sueloEn = null) {
   let poly = ring;
   const n = poly.length;
   let area2 = 0;
@@ -2034,12 +2089,18 @@ function extrudeRing(ring, base, top, uv, wall, abrir = null) {
     if (y1 - y0 < 1e-3) return;
     const p0 = [p[0], y0, p[1]], p1 = [q[0], y0, q[1]];
     const p2 = [q[0], y1, q[1]], p3 = [p[0], y1, p[1]];
+    // El suelo de referencia en cada extremo de la arista. Sin esto los seis
+    // vertices comparten una cota unica y en una casa larga en cuesta el zocalo
+    // queda enterrado por un lado y flotando -sin ventanas- por el otro.
+    const sp = sueloEn ? sueloEn(p[0], p[1]) : uv[1];
+    const sq = sueloEn ? sueloEn(q[0], q[1]) : uv[1];
     // Godot: [p0,p2,p1, p0,p3,p2]. Invertido para antihorario.
-    for (const t of [p0, p1, p2, p0, p2, p3]) {
+    const suelos = [sp, sq, sq, sp, sq, sp];
+    [p0, p1, p2, p0, p2, p3].forEach((t, k) => {
       wall.v.push(t[0], t[1], t[2]);
       wall.n.push(nx, 0, nz);
-      wall.uv.push(uv[0], uv[1], uv[2]);
-    }
+      wall.uv.push(uv[0], suelos[k], uv[2]);
+    });
   };
 
   for (let i = 0; i < n; i++) {
