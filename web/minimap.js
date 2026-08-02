@@ -10,8 +10,15 @@
 
 // A 540 lineas el pergamino se dibuja al doble de resolucion que antes: con 2 m
 // por pixel se veia el mapa a bloques justo cuando el resto dejo de verse asi.
-const MPP = 1.0;                  // metros por pixel del lienzo
+const MPP = 1.0;                  // metros por pixel del lienzo del casco
 const VIEW_M = 128.0;             // 128 m en 128 px = 1 texel por pixel de pantalla
+// Y el de la sierra, que es otro pergamino y no el mismo estirado. A 6 m por
+// pixel los 14 x 12 km caben en 2.350 x 2.017, menos memoria que el del casco, y
+// a esa escala se ve el trazado de un camino, que es para lo que sirve. Estirar
+// el del casco a la sierra serian 170 millones de pixeles, y bajar el casco a
+// 6 m dejaria el pueblo en manchas: por eso son dos.
+const MPP_SIERRA = 6.0;
+const VIEW_SIERRA = 900.0;        // se abarca mas campo, que fuera hay mas que andar
 const BOX_REF = 64;               // el recuadro medido sobre el diseno de 480x270
 const ALTO_REF = 270;
 
@@ -62,7 +69,60 @@ export class Minimap {
     g.fill();
 
     this.tex = off;
-    console.log(`minimapa ${this.w}x${this.h} px en ${Math.round(performance.now() - t0)} ms`);
+
+    // --- el pergamino de la sierra ------------------------------------------
+    //
+    // Antes el mapa acababa en el recorte del casco y la ventana se frenaba en el
+    // borde: en cuanto pasabas de z = 2100 la flecha se despegaba del centro y
+    // acababa fuera del recuadro. Con la sierra abierta y la Silla a 1,5 km
+    // fuera, eso pasa constantemente.
+    if (world.sierra) {
+      const si = world.sInfo;
+      this.sx0 = si.x0; this.sz0 = si.z0;
+      this.sw = Math.floor(si.w * si.res / MPP_SIERRA);
+      this.sh = Math.floor(si.h * si.res / MPP_SIERRA);
+      const os = new OffscreenCanvas(this.sw, this.sh);
+      const gs = os.getContext('2d');
+      gs.fillStyle = PARCHMENT;
+      gs.fillRect(0, 0, this.sw, this.sh);
+      const aX = (x) => (x - this.sx0) / MPP_SIERRA;
+      const aZ = (z) => (z - this.sz0) / MPP_SIERRA;
+
+      gs.strokeStyle = INK_ROAD;
+      gs.lineCap = 'round';
+      gs.lineWidth = 1.2;
+      for (const r of (w.sendas || [])) {
+        gs.beginPath();
+        gs.moveTo(aX(r.p[0]), aZ(r.p[1]));
+        for (let i = 2; i < r.p.length; i += 2) gs.lineTo(aX(r.p[i]), aZ(r.p[i + 1]));
+        gs.stroke();
+      }
+      // Y las calles del casco encima, mas gruesas: desde el monte lo que se
+      // busca en el mapa es por donde se vuelve al pueblo.
+      gs.lineWidth = 1.8;
+      for (const r of w.roads) {
+        if (r.w < 5.0) continue;
+        gs.beginPath();
+        gs.moveTo(aX(r.p[0]), aZ(r.p[1]));
+        for (let i = 2; i < r.p.length; i += 2) gs.lineTo(aX(r.p[i]), aZ(r.p[i + 1]));
+        gs.stroke();
+      }
+      // El caserio, como mancha. A 6 m por pixel una casa es un punto, asi que se
+      // pintan todas de una tacada y lo que se lee es la forma del pueblo.
+      gs.fillStyle = INK_HOUSE;
+      gs.beginPath();
+      for (const b of w.buildings) {
+        gs.moveTo(aX(b.p[0]), aZ(b.p[1]));
+        for (let i = 2; i < b.p.length; i += 2) gs.lineTo(aX(b.p[i]), aZ(b.p[i + 1]));
+        gs.closePath();
+      }
+      gs.fill();
+      this.texSierra = os;
+    }
+
+    console.log(`minimapa ${this.w}x${this.h} px`
+      + (this.texSierra ? ` + sierra ${this.sw}x${this.sh}` : '')
+      + ` en ${Math.round(performance.now() - t0)} ms`);
   }
 
   draw(pos, yaw) {
@@ -74,15 +134,28 @@ export class Minimap {
     const k = Math.max(1, Math.round(this.canvas.height / ALTO_REF));
     const BOX = BOX_REF * k;
     const margen = 6 * k;
-    const half = VIEW_M / MPP * 0.5;
+
+    // Que pergamino toca. Fuera del casco -y con un margen, para no cambiar de
+    // escala justo al pisar la raya- manda el de la sierra. Sin el, la ventana se
+    // frenaba en el borde del casco y la flecha se salia del recuadro.
+    const [sx, sz] = this.world.data.size_m;
+    const fuera = pos.x < -40 || pos.x > sx + 40 || pos.z < -40 || pos.z > sz + 40;
+    const enSierra = fuera && !!this.texSierra;
+    const tex = enSierra ? this.texSierra : this.tex;
+    const mpp = enSierra ? MPP_SIERRA : MPP;
+    const vista = enSierra ? VIEW_SIERRA : VIEW_M;
+    const tw = enSierra ? this.sw : this.w, th = enSierra ? this.sh : this.h;
+    const ox = enSierra ? this.sx0 : 0, oz = enSierra ? this.sz0 : 0;
+
+    const half = vista / mpp * 0.5;
     // En el borde del mundo la ventana se frena y la flecha se descentra, en vez
     // de ensenar vacio fuera del lienzo.
-    const cx = Math.min(Math.max(pos.x / MPP, half), this.w - half);
-    const cz = Math.min(Math.max(pos.z / MPP, half), this.h - half);
+    const cx = Math.min(Math.max((pos.x - ox) / mpp, half), tw - half);
+    const cz = Math.min(Math.max((pos.z - oz) / mpp, half), th - half);
 
     const x0 = this.canvas.width - BOX - margen, y0 = margen;
     c.imageSmoothingEnabled = false;
-    c.drawImage(this.tex, cx - half, cz - half, half * 2, half * 2, x0, y0, BOX, BOX);
+    c.drawImage(tex, cx - half, cz - half, half * 2, half * 2, x0, y0, BOX, BOX);
     c.strokeStyle = INK_FRAME;
     c.lineWidth = 1;
     c.strokeRect(x0 + 0.5, y0 + 0.5, BOX - 1, BOX - 1);
@@ -90,8 +163,8 @@ export class Minimap {
     // Flecha con el rumbo real. En el mapa +y de pantalla es +z del mundo.
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     const ang = Math.atan2(fz, fx) + Math.PI * 0.5;   // el triangulo base apunta a -y
-    const px = x0 + (pos.x / MPP - cx + half) / (half * 2) * BOX;
-    const py = y0 + (pos.z / MPP - cz + half) / (half * 2) * BOX;
+    const px = x0 + ((pos.x - ox) / mpp - cx + half) / (half * 2) * BOX;
+    const py = y0 + ((pos.z - oz) / mpp - cz + half) / (half * 2) * BOX;
     c.save();
     c.translate(px, py);
     c.rotate(ang);
@@ -118,26 +191,30 @@ export class Minimap {
     // Y son las mismas que aceptan ?x= y ?z= al arrancar, asi que leer una
     // captura y plantarse en el sitio es copiar dos numeros. Por eso van con la
     // coma y el espacio, en ese formato y no en otro.
-    const alto = 10 * k, pad = 3 * k;
+    //
+    // La caja se ajusta al TEXTO y no al ancho del mapa, y la letra es la mas
+    // pequena que se lee: esto se mira de reojo dos veces por partida y no tiene
+    // por que ocupar como el mapa.
+    const fuente = 5 * k, alto = 7 * k, pad = 2 * k;
     const calle = this.lugares && this.lugares.calleEn ? this.lugares.calleEn(pos) : null;
-    const lineas = [
-      `${Math.round(pos.x)}, ${Math.round(pos.z)}   ${Math.round(pos.y)} m`,
-    ];
+    // Fuera del casco se dice la escala. Un mapa que cambia de escala sin avisar
+    // desorienta mas que no tenerlo.
+    const lineas = [`${Math.round(pos.x)}, ${Math.round(pos.z)}  ${Math.round(pos.y)} m`];
     if (calle) lineas.push(calle);
-    c.font = `${7 * k}px monospace`;
-    // Fondo del mismo pergamino que el mapa: sobre un muro blanco al sol, letra
-    // dorada sobre nada no se lee.
+    else if (enSierra) lineas.push('el monte');
+    c.font = `${fuente}px monospace`;
     let ancho = 0;
     for (const l of lineas) ancho = Math.max(ancho, c.measureText(l).width);
-    const bw = Math.min(Math.max(ancho + pad * 2, BOX), BOX * 1.9);
-    const bx = x0 + BOX - bw;
+    const bw = ancho + pad * 2, bh = alto * lineas.length + pad;
+    const bx = x0 + BOX - bw, by = y0 + BOX + 2 * k;
     c.fillStyle = PARCHMENT;
-    c.fillRect(bx, y0 + BOX + 2 * k, bw, alto * lineas.length + pad);
+    c.fillRect(bx, by, bw, bh);
     c.strokeStyle = INK_FRAME;
-    c.strokeRect(bx + 0.5, y0 + BOX + 2 * k + 0.5, bw - 1, alto * lineas.length + pad - 1);
-    c.fillStyle = INK_PLAYER;
+    c.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
     lineas.forEach((l, i) => {
-      c.fillText(l, bx + pad, y0 + BOX + 2 * k + pad + alto * (i + 0.8));
+      // La calle, mas apagada: lo que se copia son los numeros.
+      c.fillStyle = i ? INK_FRAME : INK_PLAYER;
+      c.fillText(l, bx + pad, by + pad + alto * (i + 0.75));
     });
   }
 }

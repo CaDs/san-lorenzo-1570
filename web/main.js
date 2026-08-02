@@ -184,7 +184,7 @@ portada.addEventListener('click', () => {
 }, { once: true });
 
 Object.assign(window, { THREE, scene, camera, world, player, cielo, renderer,
-  vida, misiones, lugares, barra, sonido });
+  vida, misiones, lugares, barra, sonido, minimapa });
 
 function paso(dt) {
   reloj += dt;

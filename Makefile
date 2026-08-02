@@ -1,6 +1,6 @@
 PORT ?= 8000
 
-.PHONY: dev test tramas clima sonido data
+.PHONY: dev test tramas clima sonido casas data
 
 # El juego no se compila: son ficheros sueltos que sirve cualquier servidor
 # estatico. Se sirve la raiz porque web/ lee ../data/build/.
@@ -34,6 +34,14 @@ clima:
 # del oficio, ni una mas.
 sonido:
 	@node web/ambiente.test.mjs
+
+# Donde se asienta cada casa: base, suelo, plantas y alto. Corre en node contra
+# las 3.545 casas de verdad leyendo terrain.bin, sin navegador y en dos segundos,
+# porque los fallos que caza salen de la forma del terreno y no de la logica.
+# Cada aserto es un fallo que ya paso: casas enterradas hasta 16,7 m, muros
+# arrancando por encima del suelo, fachadas sin una planta a la vista.
+casas:
+	@node web/casas.test.mjs
 
 # Regenera data/build/ desde data/raw/. Necesita GDAL y, si data/raw/ no esta,
 # conexion para descargarlo. Los datos generados ya vienen en el repositorio:

@@ -52,6 +52,7 @@ en el monte de verdad.
 | `ambiente.js` | que deberia oirse, en numeros: puro, con su test de node |
 | `sonido.js` | Web Audio: capas de ruido, bichos, sucesos y la campana |
 | `trees.js` | siete especies instanciadas, de la fresneda al piornal |
+| `casas.js` | donde se asienta una casa: puro, con su test de node |
 | `trees.js` | arquetipos de encina y pino, instanciados |
 | `npcs.js` | vecinos, perros, gatos, vacas, ovejas, gallinas, pajaros y el rey |
 | `quests.js` | el hilo del encargo en curso y el pergamino de dialogo |

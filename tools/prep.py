@@ -500,8 +500,10 @@ if os.path.exists(tmpp25830):
 sh(["ogr2ogr", "-f", "GeoJSON", "-s_srs", "EPSG:4326", "-t_srs", "EPSG:25830",
     tmpp25830, tmpp4326])
 
-# Una pista forestal es mas ancha que una senda de cabras, y se nota subiendo.
-SENDA_W = {"track": 3.0, "bridleway": 2.2, "path": 1.6}
+# Una carretera de monte es mas ancha que una pista forestal, y esta mas que una
+# senda de cabras. Se nota subiendo.
+SENDA_W = {"tertiary": 5.0, "unclassified": 4.0, "track": 3.0,
+           "bridleway": 2.2, "path": 1.6}
 sendas, sm = [], 0.0
 SX0w, SZ0w = SX0 - X0, Y1 - SY1                  # esquina NO de la sierra, en mundo
 SXw, SZw = SX1 - SX0, SY1 - SY0
@@ -535,7 +537,18 @@ for f in json.load(open(tmpp25830))["features"]:
         sendas.append({"w": w, "p": flat})
 for f in (tmpp4326, tmpp25830):
     os.remove(f)
-print(f"    {len(sendas)} tramos de senda, {sm / 1000:.1f} km")
+
+# La Silla de Felipe II tiene que quedar a la mano de un camino. Es un hito, no
+# un rincon, y el dia que se le caiga la via de encima -por un cambio de filtro o
+# porque OSM la reetiquete- se sabe aqui y no en una captura. La ruta real es la
+# Carretera de La Herreria, unclassified, que fue justo la clase que faltaba.
+SILLA = (939.0, 3599.0)     # node/285895835 de OSM, pasado a coordenadas del mundo
+cerca = min((((p[0] - SILLA[0]) ** 2 + (p[1] - SILLA[1]) ** 2) ** 0.5)
+            for s in sendas for p in zip(s["p"][0::2], s["p"][1::2]))
+assert cerca < 40, f"la Silla de Felipe II se ha quedado a {cerca:.0f} m del camino mas cercano"
+
+print(f"    {len(sendas)} tramos de senda, {sm / 1000:.1f} km"
+      f" | la Silla, a {cerca:.0f} m de camino")
 
 world = {
     "origin_utm": [X0, Y0], "epsg": 25830,

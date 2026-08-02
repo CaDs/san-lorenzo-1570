@@ -117,7 +117,13 @@ make test       # abre web/?test: el jugador anda, no se hunde y las fachadas fr
 make tramas     # 300 semillas y 500 encargos seguidos: ningun objetivo imposible
 make clima      # 60 años de tiempo: se parece al de la sierra de verdad
 make sonido     # que la campana toque ocho veces y ninguna ganancia salga NaN
+make casas      # las 3.545 casas: ninguna enterrada, ningun muro en el aire
 ```
+
+Los cuatro de node corren sin navegador y en un par de segundos, que es lo que
+hace que se corran. `make casas` en particular existe porque los fallos de
+geometría —una casa enterrada, una fachada sin planta baja— eran medibles y se
+medían a mano *después* de verlos en una captura.
 
 ## Licencia y procedencia de los datos
 

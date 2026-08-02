@@ -39,10 +39,19 @@ overpass "Edificios" data/raw/buildings.json \
 overpass "Viario" data/raw/roads.json \
   "way[\"highway\"][\"highway\"!~\"^(proposed|construction|raceway|bus_guideway)\$\"][\"area\"!=\"yes\"]($LAT0,$LON0,$LAT1,$LON1);out body geom;"
 
-# Las sendas del monte. Solo camino, pista y canada: nada de acera ni escalera,
-# que fuera del casco esas son las de los pueblos vecinos, que aqui no se
-# levantan, y saldrian aceras sueltas en mitad de la nada.
-overpass "Sendas de la sierra" data/raw/paths_sierra.json \
-  "way[\"highway\"~\"^(path|track|bridleway)\$\"]($SLAT0,$SLON0,$SLAT1,$SLON1);out body geom;"
+# Las sendas y los caminos carreteros del monte.
+#
+# `unclassified` y `tertiary` NO son adorno: la ruta a la Silla de Felipe II es la
+# Carretera de La Herreria, que va etiquetada unclassified y baja del pueblo hasta
+# la Silla en seis tramos. Pidiendo solo path|track|bridleway faltaba entera, y
+# con ella el viario de todo el Bosque de La Herreria, que queda justo al sur del
+# recorte del casco.
+#
+# Y se quedan fuera a proposito `residential`, `service` y `living_street`: dentro
+# de este rectangulo hay 1.083 calles residenciales y 461 viales de servicio que
+# son los de El Escorial de hoy y las urbanizaciones. Un camino carretero por el
+# monte si; un callejero del siglo XX en un pueblo de 1570 no.
+overpass "Sendas y caminos de la sierra" data/raw/paths_sierra.json \
+  "way[\"highway\"~\"^(path|track|bridleway|unclassified|tertiary)\$\"]($SLAT0,$SLON0,$SLAT1,$SLON1);out body geom;"
 
 echo "OK -> data/raw/"

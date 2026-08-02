@@ -3,6 +3,7 @@ import { crearArboleda } from './trees.js';
 import { Precipitacion } from './lluvia.js';
 import { Humo } from './humo.js';
 import { muestrear } from './ambiente.js';
+import { asiento } from './casas.js';
 
 // Construye el terreno y los edificios de San Lorenzo desde data/build/.
 // Sistema de coordenadas:
@@ -15,11 +16,8 @@ import { muestrear } from './ambiente.js';
 
 const DATA = '../data/build/';
 
-// Escala medieval. OSM describe el pueblo de hoy: bloques de 4 a 6 plantas de
-// 3 m. Un caserio medieval son 1 a 3 alturas escasas.
-const STOREY_H = 2.6;
-const MAX_STOREYS = 3;
-const STOREY_DIV = 3.2;
+// La escala medieval -STOREY_H, MAX_STOREYS, STOREY_DIV- vive en casas.js, que
+// es quien decide el asiento y quien tiene el test.
 
 const ROOF_PITCH = 0.92;
 const ROOF_MAX = 4.6;
@@ -1153,45 +1151,13 @@ export class World extends THREE.Group {
       // Una nave de 600 m2 no se levanta con entramado de madera.
       if (Math.abs(area2) * 0.5 > 600) seed *= 0.28;
 
-      const base = b.b;
-      // El suelo de la casa: de donde arranca la planta baja, y de donde el
-      // sombreador mide TODO -el zocalo, las hiladas de entramado y si en una
-      // celda hay ventana o no-.
-      //
-      // Salia de `b.t - b.h`, o sea de dos numeros de OSM, y esos dos numeros no
-      // saben por donde va el terreno. De las 3.545 casas, 858 tenian ese suelo a
-      // mas de metro y medio del suelo de verdad y la peor a 12,2 m. Cuando cae
-      // por ENCIMA del terreno, el sombreador pinta zocalo de piedra desde ahi
-      // para abajo y ademas apaga los huecos -`existe` lleva step(plinto, lh)-:
-      // sale una franja ciega de varios metros al pie de la fachada, sin ventanas
-      // y sin entramado, y el entramado empieza a media altura. Eso es lo que se
-      // veia desde la Plaza de la Constitucion.
-      //
-      // Se ancla al terreno mas BAJO de la huella, no al medio. En una casa en
-      // cuesta ninguna cota unica vale para las cuatro esquinas: con la mas baja,
-      // lo que sobra queda enterrado cuesta arriba -y enterrado no se ve-,
-      // mientras que con la media o la mas alta la franja ciega vuelve a asomar
-      // por el lado de abajo, que es justo el fallo que se esta quitando.
-      let sueloMin = Infinity, sueloMax = -Infinity;
-      for (let i = 0; i < flat.length; i += 2) {
-        const j = (i + 2) % flat.length;
-        for (let k = 0; k <= 4; k++) {
-          const t = k / 4;
-          const y = this.heightAt(flat[i] + (flat[j] - flat[i]) * t,
-            flat[i + 1] + (flat[j + 1] - flat[i + 1]) * t);
-          sueloMin = Math.min(sueloMin, y);
-          sueloMax = Math.max(sueloMax, y);
-        }
-      }
-      // El alto de la casa se cuenta desde el terreno MAS ALTO de la huella. Con
-      // el mas bajo -que es lo que hubo entre medias- una casa larga en cuesta
-      // acababa por debajo del terreno cuesta arriba: 116 casas enterradas y la
-      // peor 16,7 m. Con el mas alto, las plantas se cuentan desde donde el
-      // terreno manda y por abajo sobra muro, que es lo que hace una casa en
-      // cuesta de verdad.
-      const suelo = sueloMax;
-      const plantas = Math.min(Math.max(Math.round(b.h / STOREY_DIV), 1), MAX_STOREYS);
-      const top = suelo + plantas * STOREY_H + seed * 0.45;
+      // Donde se asienta: base, suelo y plantas salen de casas.js, que es puro y
+      // tiene su test de node contra las 3.545 casas reales. Aqui solo se
+      // construye la malla. El +seed*0.45 rompe la cornisa perfectamente alineada
+      // de una manzana entera y es lo unico de esto que es decoracion.
+      const asen = asiento(flat, (x, z) => this.heightAt(x, z), b);
+      const { base, suelo, plantas } = asen;
+      const top = asen.top + seed * 0.45;
 
       if (k === monIdx) {
         this.monastery(poly, base, suelo, wall, roof, abrirPaso);
