@@ -252,6 +252,13 @@ export class Barra {
       <div><kbd>[</kbd> <kbd>]</kbd> mover el sol una hora · <kbd>P</kbd> parar el reloj</div>
       <div><kbd>V</kbd> vuelo libre: <kbd>W</kbd> <kbd>S</kbd> avanzar ·
         <kbd>A</kbd> ladear · <kbd>E</kbd> subir · <kbd>D</kbd> bajar</div>
+      <div class="fila"><b>donde estas</b></div>
+      <div>Debajo del mapa van las coordenadas del sitio: <b>X</b> hacia el este
+        y <b>Z</b> hacia el <b>sur</b>, en metros, mas la cota. Fuera del pueblo
+        salen negativas, que es lo que pasa en el monte.</div>
+      <div>Son las mismas que <kbd>?x=</kbd> y <kbd>?z=</kbd> en la direccion, asi
+        que para volver a un sitio -o para contarle a alguien donde esta algo
+        roto- basta con copiar los dos numeros.</div>
       <div class="fila"><b>saber</b></div>
       <div>Con <b>✎ saber</b> puesto, los vecinos cuentan lo que su oficio puede
         saber estando aqui en 1570, y en los sitios saltan cartelas con el dato

@@ -115,7 +115,7 @@ const misiones = new Misiones(world, vida, lugares, semilla, player.pos, cielo.c
 const hud = document.getElementById('hud');
 hud.width = W; hud.height = H;
 const hudCtx = hud.getContext('2d');
-const minimapa = new Minimap(hud, world);
+const minimapa = new Minimap(hud, world, lugares);
 
 // E habla, Q pregunta el camino. En modo libre E es "subir", asi que ahi no
 // interrumpe el vuelo.

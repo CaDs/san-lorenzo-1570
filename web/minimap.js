@@ -22,9 +22,13 @@ const INK_FRAME = 'rgb(153, 128, 77)';
 const INK_PLAYER = 'rgb(255, 217, 102)';
 
 export class Minimap {
-  constructor(canvas, world) {
+  constructor(canvas, world, lugares) {
     this.canvas = canvas;
     this.world = world;
+    // Para poner el nombre de la calle debajo de las coordenadas: "1287, 1066"
+    // dice donde exactamente y "Plaza de la Constitucion" dice donde a secas, y
+    // hacen falta las dos cosas para contar donde esta algo.
+    this.lugares = lugares;
     this.ctx = canvas.getContext('2d');
 
     const t0 = performance.now();
@@ -103,5 +107,37 @@ export class Minimap {
     c.fillStyle = INK_PLAYER;
     c.font = `${8 * k}px monospace`;
     c.fillText('N', x0 + BOX * 0.5 - 2 * k, y0 + 10 * k);
+
+    // --- donde estas, en numeros ---------------------------------------------
+    //
+    // Debajo del mapa, para poder DECIR donde pasa algo. Son las coordenadas del
+    // mundo tal cual: X al este desde la esquina suroeste del recorte y Z al SUR
+    // desde su borde norte, en metros. Fuera del casco salen negativas o pasan de
+    // 3600, y eso esta bien: la sierra empieza ahi.
+    //
+    // Y son las mismas que aceptan ?x= y ?z= al arrancar, asi que leer una
+    // captura y plantarse en el sitio es copiar dos numeros. Por eso van con la
+    // coma y el espacio, en ese formato y no en otro.
+    const alto = 10 * k, pad = 3 * k;
+    const calle = this.lugares && this.lugares.calleEn ? this.lugares.calleEn(pos) : null;
+    const lineas = [
+      `${Math.round(pos.x)}, ${Math.round(pos.z)}   ${Math.round(pos.y)} m`,
+    ];
+    if (calle) lineas.push(calle);
+    c.font = `${7 * k}px monospace`;
+    // Fondo del mismo pergamino que el mapa: sobre un muro blanco al sol, letra
+    // dorada sobre nada no se lee.
+    let ancho = 0;
+    for (const l of lineas) ancho = Math.max(ancho, c.measureText(l).width);
+    const bw = Math.min(Math.max(ancho + pad * 2, BOX), BOX * 1.9);
+    const bx = x0 + BOX - bw;
+    c.fillStyle = PARCHMENT;
+    c.fillRect(bx, y0 + BOX + 2 * k, bw, alto * lineas.length + pad);
+    c.strokeStyle = INK_FRAME;
+    c.strokeRect(bx + 0.5, y0 + BOX + 2 * k + 0.5, bw - 1, alto * lineas.length + pad - 1);
+    c.fillStyle = INK_PLAYER;
+    lineas.forEach((l, i) => {
+      c.fillText(l, bx + pad, y0 + BOX + 2 * k + pad + alto * (i + 0.8));
+    });
   }
 }
