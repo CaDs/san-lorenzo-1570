@@ -52,7 +52,9 @@ make dev        # http://localhost:8000/web/
   nombre real de OSM —los lobos de la dehesa, el agua de la argamasa, la campana
   rajada de San Bernabé—. Quien te lo encarga es quien te lo cierra: los vecinos
   tienen nombre y el pueblo tiene veintisiete canteros. La semilla se ve en la
-  portada y se repite con `?seed=`.
+  portada y se repite con `?seed=`. Un cono dorado sobre la cabeza señala a quién
+  toca: con 476 vecinos por la calle, «vuelve con Antón el cantero» era buscar a
+  Wally.
 - **Y encargos que solo salen cuando toca**: la nieve que corta el camino de los
   carros de piedra, la helada que revienta la cal recién puesta, la siega de
   agosto, la riada que se lleva el vado, la leña antes del invierno. En enero no

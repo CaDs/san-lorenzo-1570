@@ -176,6 +176,11 @@ export class Misiones {
     // aguador que habia quedado a doscientos metros.
     if (this.dialogo) {
       this._comprobarDistancia(player);
+      // La senal se decide AQUI y no al final, porque de aqui abajo hay dos
+      // returns con el dialogo abierto y se quedaria colgada del ultimo a quien
+      // se senalo. Ya se ha comprobado la distancia, asi que `this.dialogo` esta
+      // al dia.
+      this._senalar(player);
       if (this.dialogo) return;   // sigue abierto: no hace falta buscar mas
     }
 
@@ -195,6 +200,30 @@ export class Misiones {
     } catch {
       this.cerca = null;        // vida.cercano no debe poder tumbar el juego
     }
+    if (!this.dialogo) this._senalar(player);
+  }
+
+  // A quien le cuelga la senal de la cabeza este fotograma.
+  //
+  // Dos casos, y los dos son el mismo paso del encargo visto desde antes y desde
+  // despues de saber con quien se habla:
+  //
+  //   - Si ya se sabe QUIEN resolvio el hueco -"vuelve con Anton el cantero"-, se
+  //     senala a esa persona y solo a esa. Es el caso que duele: el nombre esta
+  //     escrito abajo y delante hay doce sombreros de cantero iguales.
+  //   - Si aun no se sabe, vale cualquiera de ese oficio, asi que se senala al mas
+  //     cercano. No destripa nada: el encargo ya dice "busca a un cantero", y
+  //     senalar a los veintisiete seria ruido.
+  //
+  // Con el dialogo abierto se apaga: ya estas hablando con quien tocaba.
+  _senalar(player) {
+    if (!this.vida || !('senalado' in this.vida)) return;
+    const q = this.actual;
+    if (this.dialogo || !q || !q.oficio) { this.vida.senalado = null; return; }
+    const at = this._atado(q);
+    this.vida.senalado = at
+      ? this.vida.entPorFicha(at.id)
+      : this.vida.entOficio(q.oficio, player.pos);
   }
 
   // Contexto que necesita dialogos.js. Se arma aqui porque es quien sabe por

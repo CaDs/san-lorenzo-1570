@@ -418,6 +418,7 @@ export class Vida {
     this.buildCows();
     this.buildChickens();
     this.buildBirds();
+    this.buildSenal();
 
     // Primera colocacion: todas las matrices, no solo las cercanas (la
     // camara aun no existe en el constructor).
@@ -1015,6 +1016,36 @@ export class Vida {
     w.walking = 1;
   }
 
+  // La senal que va sobre la cabeza de quien espera el encargo.
+  //
+  // Con 476 vecinos por la calle, "vuelve con Anton el cantero" es un problema de
+  // buscar a Wally: el nombre esta escrito abajo pero delante hay doce sombreros
+  // iguales. Un cono dorado que gira despacio resuelve los ultimos veinte metros,
+  // que es donde de verdad se pierde el tiempo.
+  //
+  // Va como InstancedMesh de una sola instancia, y no como Mesh, porque el
+  // constructor recorre `_objetos` marcando `instanceMatrix.needsUpdate` y un
+  // Mesh pelado no lo tiene. Una instancia no cuesta nada y encaja con todo lo
+  // que ya hay montado.
+  //
+  // MeshBasicMaterial a proposito: no lo toca la luz. Una senal que se apaga de
+  // noche no es una senal, y de noche es cuando mas falta hace distinguir a
+  // alguien entre doce siluetas oscuras.
+  buildSenal() {
+    const g = new THREE.ConeGeometry(0.17, 0.34, 4);
+    g.rotateX(Math.PI);                       // la punta, hacia la cabeza
+    const m = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(1.0, 0.72, 0.28),
+      fog: false,                              // se ve igual de lejos y con niebla
+    });
+    this.senal = this.addPart(new THREE.InstancedMesh(g, m, 1), 'Senal');
+    // Ni proyecta ni recibe: es un simbolo, no un objeto del pueblo.
+    this.senal.castShadow = false;
+    this.senal.receiveShadow = false;
+    // A quien senalar. Lo pone quests.js cada fotograma; null la apaga.
+    this.senalado = null;
+  }
+
   // -- escritura de matrices --------------------------------------------
 
   // `dentro` = se ha metido en casa por el tiempo que hace: se escribe bajo el
@@ -1314,6 +1345,19 @@ export class Vida {
     // grupos hay que repintar; solo faltaba dejarla a mano.
     this.cerca = { vecinos: nV, perros: nD, ovejas: nS, gallinas: nC, gatos: nT, vacas: nW };
 
+    // La senal, sobre la cabeza del senalado. Gira despacio y sube y baja: quieta
+    // se confunde con un remate del caserio, y girando se lee como aviso.
+    const sen = this.senalado;
+    if (sen && sen.pos && !(sen.calle > this.fuera)) {
+      const talla = sen.talla || 1;
+      const y = this.world.heightAt(sen.pos.x, sen.pos.z)
+        + V_HEAD_Y * talla + 0.45 + Math.sin(this._t * 2.2) * 0.07;
+      setInst(this.senal, 0, sen.pos.x, y, sen.pos.z, this._t * 0.9, 0, 0, 1);
+    } else {
+      setInst(this.senal, 0, 0, -50, 0, 0, 0, 0, 0);
+    }
+    this.senal.instanceMatrix.needsUpdate = true;
+
     if (nV) marcar(this._grupos.Vecino);
     if (nD) marcar(this._grupos.Perro);
     if (nS) marcar(this._grupos.Oveja);
@@ -1370,6 +1414,14 @@ export class Vida {
   // pueblo, la indicacion que da un vecino apunta a donde esta el otro ahora,
   // no a donde aparecio al cargar la partida.
   buscarOficio(oficio, pos) {
+    const e = this.entOficio(oficio, pos);
+    return e ? this.ficha(e) : null;
+  }
+
+  // La misma busqueda pero devolviendo la entidad viva y no su ficha. La ficha
+  // vale para hablar; para colgarle una senal de la cabeza hacen falta la talla y
+  // el resto del bicho.
+  entOficio(oficio, pos) {
     const r = ROLES.indexOf(oficio);
     if (r < 0) return null;
     let best = null, bestD = Infinity;
@@ -1383,7 +1435,16 @@ export class Vida {
       const d = (v.pos.x - pos.x) ** 2 + (v.pos.z - pos.z) ** 2;
       if (d < bestD) { bestD = d; best = v; }
     }
-    return best ? this.ficha(best) : null;
+    return best;
+  }
+
+  // La entidad detras de un id de ficha ("vecino137"). `quien` guarda ese id y el
+  // nombre, que es lo justo para no envejecer; esto lo vuelve a atar al vecino de
+  // carne y hueso cuando hace falta senalarlo.
+  entPorFicha(id) {
+    if (!id) return null;
+    for (const e of this.ent) if (`${e.tipo}${e.id}` === id) return e;
+    return null;
   }
 
   // Un vecino concreto por su id de ficha. Lo pide el encargo que manda volver
